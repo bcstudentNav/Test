@@ -1,0 +1,2387 @@
+codeunit 71129658 EVO_EXS_JsonHelper
+{
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; Val: Text)
+    begin
+        if not (Val = '') then
+            JObject.Add(KeyName, Val);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; Val: Integer)
+    begin
+        if not (Val = 0) then
+            JObject.Add(KeyName, Val);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; Val: Decimal)
+    begin
+        if not (Val = 0.00) then
+            JObject.Add(KeyName, Val);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; Val: DateTime)
+    begin
+        if not (Val = 0DT) then
+            JObject.Add(KeyName, Val);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; Val: Date)
+    begin
+        if not (Val = 0D) then
+            JObject.Add(KeyName, Val);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; Val: Time)
+    begin
+        if not (Val = 0T) then
+            JObject.Add(KeyName, Val);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; var SourceRecordRef: RecordRef; FieldIndex: Integer)
+    var
+        FieldRef: FieldRef;
+    begin
+        FieldRef := SourceRecordRef.FieldIndex(FieldIndex);
+        AddValueIfNotBlank(JObject, KeyName, FieldRef);
+    end;
+
+    procedure AddValueIfNotBlank(var JObject: JsonObject; KeyName: Text; var FieldRef: FieldRef)
+    begin
+        case FieldRef.Type() of
+            FieldRef.Type() ::BigInteger:
+                if FieldRef2BigInteger(FieldRef) <> 0 then
+                    JObject.Add(KeyName, FieldRef2BigInteger(FieldRef));
+            FieldRef.Type() ::Blob:
+                if FieldRefBlob2Base64(FieldRef) <> '' then
+                    JObject.Add(KeyName, FieldRefBlob2Base64(FieldRef));
+            FieldRef.Type() ::Boolean:
+                JObject.Add(KeyName, FieldRef2Boolean(FieldRef));
+            FieldRef.Type() ::Code:
+                if FieldRef2Code(FieldRef) <> '' then
+                    JObject.Add(KeyName, FieldRef2Code(FieldRef));
+            FieldRef.Type() ::Date:
+                if FieldRef2Date(FieldRef) <> 0D then
+                    JObject.Add(KeyName, FieldRef2Date(FieldRef));
+            FieldRef.Type() ::DateTime:
+                if FieldRef2DateTime(FieldRef) <> 0DT then
+                    JObject.Add(KeyName, FieldRef2DateTime(FieldRef));
+            FieldRef.Type() ::Decimal:
+                if FieldRef2Decimal(FieldRef) <> 0 then
+                    JObject.Add(KeyName, FieldRef2Decimal(FieldRef));
+            FieldRef.Type() ::Duration:
+                if FieldRef2Duration(FieldRef) <> 0 then
+                    JObject.Add(KeyName, FieldRef2Duration(FieldRef));
+            FieldRef.Type() ::Guid:
+                if not IsNullGuid(FieldRef2Guid(FieldRef)) then
+                    JObject.Add(KeyName, FieldRef2Guid(FieldRef));
+            FieldRef.Type() ::Integer:
+                if FieldRef2Integer(FieldRef) <> 0 then
+                    JObject.Add(KeyName, FieldRef2Integer(FieldRef));
+            FieldRef.Type() ::Media:
+                if FieldRefMedia2Base64(FieldRef) <> '' then
+                    JObject.Add(KeyName, FieldRefMedia2Base64(FieldRef));
+            FieldRef.Type() ::MediaSet:
+                if FieldRefMediaSet2Base64(FieldRef) <> '' then
+                    JObject.Add(KeyName, FieldRefMediaSet2Base64(FieldRef));
+            FieldRef.Type() ::Option:
+                if FieldRef2Option(FieldRef) <> 0 then
+                    JObject.Add(KeyName, FieldRef2Option(FieldRef));
+            FieldRef.Type() ::RecordId:
+                if FieldRef2RecordId(FieldRef) <> '' then
+                    JObject.Add(KeyName, FieldRef2RecordId(FieldRef));
+            FieldRef.Type() ::Text:
+                if FieldRef2Text(FieldRef) <> '' then
+                    JObject.Add(KeyName, FieldRef2Text(FieldRef));
+            FieldRef.Type() ::Time:
+                if FieldRef2Time(FieldRef) <> 0T then
+                    JObject.Add(KeyName, FieldRef2Time(FieldRef));
+        end;
+    end;
+
+    procedure ValueAsCode(JObject: JsonObject; KeyName: Text): Code[2048]
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit('');
+
+        exit(CopyStr(ResultToken.AsValue().AsCode(), 1, 2048));
+    end;
+
+    procedure ValueAsText(JObject: JsonObject; KeyName: Text): Text
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit('');
+
+        exit(ResultToken.AsValue().AsText());
+    end;
+
+    procedure ValueAsGuid(JObject: JsonObject; KeyName: Text): Guid
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit('');
+
+        exit(ResultToken.AsValue().AsText());
+    end;
+
+    procedure ValueAsInteger(JObject: JsonObject; KeyName: Text): Integer
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(0);
+
+        exit(ResultToken.AsValue().AsInteger());
+    end;
+
+    procedure ValueAsBigInteger(JObject: JsonObject; KeyName: Text): BigInteger
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(0);
+
+        exit(ResultToken.AsValue().AsBigInteger());
+    end;
+
+    procedure ValueAsDecimal(JObject: JsonObject; KeyName: Text): Decimal
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(0.00);
+
+        exit(ResultToken.AsValue().AsDecimal());
+    end;
+
+    procedure ValueAsDate(JObject: JsonObject; KeyName: Text): Date
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(0D);
+
+        exit(ResultToken.AsValue().AsDate());
+    end;
+
+    procedure ValueAsTime(JObject: JsonObject; KeyName: Text): Time
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(0T);
+
+        exit(ResultToken.AsValue().AsTime());
+    end;
+
+    procedure ValueAsDateTime(JObject: JsonObject; KeyName: Text): DateTime
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(0DT);
+
+        exit(ResultToken.AsValue().AsDateTime());
+    end;
+
+    procedure ValueAsBoolean(JObject: JsonObject; KeyName: Text): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit(false);
+
+        exit(ResultToken.AsValue().AsBoolean());
+    end;
+
+    procedure ValueAsChar(JObject: JsonObject; KeyName: Text): Char
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit;
+
+        exit(ResultToken.AsValue().AsChar());
+    end;
+
+    procedure ValueAsByte(JObject: JsonObject; KeyName: Text): Byte
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit;
+
+        exit(ResultToken.AsValue().AsByte());
+    end;
+
+    procedure ValueAsDuration(JObject: JsonObject; KeyName: Text): Duration
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit;
+
+        exit(ResultToken.AsValue().AsDuration());
+    end;
+
+    procedure ValueAsOption(JObject: JsonObject; KeyName: Text): Option
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit;
+
+        exit(ResultToken.AsValue().AsOption());
+    end;
+
+    procedure ValueAsToken(JObject: JsonObject; KeyName: Text): JsonToken
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit;
+
+        exit(ResultToken.AsValue().AsToken());
+    end;
+
+    procedure ValueAsJsonObject(JObject: JsonObject; KeyName: Text): JsonObject
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        exit(ResultToken.AsObject());
+    end;
+
+    procedure ValueAsJsonArray(JObject: JsonObject; KeyName: Text): JsonArray
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        exit(ResultToken.AsArray());
+    end;
+
+    procedure ValueAsJsonValue(JObject: JsonObject; KeyName: Text): JsonValue
+    var
+        ResultToken: JsonToken;
+    begin
+        JObject.Get(KeyName, ResultToken);
+        if ResultToken.AsValue().IsNull then
+            exit;
+
+        exit(ResultToken.AsValue());
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Code[2048]): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := CopyStr(ResultToken.AsValue().AsCode(), 1, 2048);
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Text): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsText();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Guid): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsText();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Integer): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsInteger();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: BigInteger): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsBigInteger();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Decimal): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsDecimal();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Date): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsDate();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Time): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsTime();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: DateTime): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsDateTime();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Boolean): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsBoolean();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Char): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsChar();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Byte): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsByte();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Duration): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsDuration();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: Option): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue() then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue().AsOption();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: JsonToken): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if ResultToken.IsValue then
+            if (ResultToken.AsValue().IsNull()) then
+                exit(false);
+
+        Result := ResultToken.AsValue().AsToken();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: JsonObject): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsObject then
+            exit(false);
+
+        Result := ResultToken.AsObject();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: JsonArray): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsArray then
+            exit(false);
+
+        Result := ResultToken.AsArray();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var Result: JsonValue): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(Result);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if not ResultToken.IsValue then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        Result := ResultToken.AsValue();
+        exit(true);
+    end;
+
+    procedure TryGetValue(JObject: JsonObject; KeyName: Text; var ResultVariant: Variant): Boolean
+    var
+        ResultToken: JsonToken;
+    begin
+        Clear(ResultVariant);
+        if not JObject.Get(KeyName, ResultToken) then
+            exit(false);
+
+        if (ResultToken.AsValue().IsNull()) then
+            exit(false);
+
+        ResultVariant := ResultToken.AsValue();
+        exit(true);
+    end;
+
+    procedure TryGetValue(HttpResponseMessage: HttpResponseMessage; var ResultToken: JsonToken): Boolean
+    var
+        ResponseText: Text;
+    begin
+        if HttpResponseMessage.Content.ReadAs(ResponseText) then
+            exit(ResultToken.ReadFrom(ResponseText));
+    end;
+
+    procedure TryGetValue(HttpResponseMessage: HttpResponseMessage; var ResultValue: JsonValue): Boolean
+    var
+        ResponseText: Text;
+    begin
+        if HttpResponseMessage.Content.ReadAs(ResponseText) then
+            exit(ResultValue.ReadFrom(ResponseText));
+    end;
+
+    procedure TryGetValue(HttpResponseMessage: HttpResponseMessage; var ResultObject: JsonObject): Boolean
+    var
+        ResponseText: Text;
+    begin
+        if HttpResponseMessage.Content.ReadAs(ResponseText) then
+            exit(ResultObject.ReadFrom(ResponseText));
+    end;
+
+    procedure TryGetValue(HttpResponseMessage: HttpResponseMessage; var ResultArray: JsonArray): Boolean
+    var
+        ResponseText: Text;
+    begin
+        if HttpResponseMessage.Content.ReadAs(ResponseText) then
+            exit(ResultArray.ReadFrom(ResponseText));
+    end;
+
+    procedure ResponseAsToken(var HttpResponseMessage: HttpResponseMessage) Result: JsonToken
+    var
+        ResponseText: Text;
+    begin
+        HttpResponseMessage.Content.ReadAs(ResponseText);
+        Result.ReadFrom(ResponseText);
+    end;
+
+    procedure ResponseAsValue(var HttpResponseMessage: HttpResponseMessage) Result: JsonValue
+    var
+        ResponseText: Text;
+    begin
+        HttpResponseMessage.Content.ReadAs(ResponseText);
+        Result.ReadFrom(ResponseText);
+    end;
+
+    procedure ResponseAsObject(var HttpResponseMessage: HttpResponseMessage) Result: JsonObject
+    var
+        ResponseText: Text;
+    begin
+        HttpResponseMessage.Content.ReadAs(ResponseText);
+        Result.ReadFrom(ResponseText);
+    end;
+
+    procedure ResponseAsArray(var HttpResponseMessage: HttpResponseMessage) Result: JsonArray
+    var
+        ResponseText: Text;
+    begin
+        HttpResponseMessage.Content.ReadAs(ResponseText);
+        Result.ReadFrom(ResponseText);
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: JsonObject): Boolean
+    var
+        JToken: JsonToken;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JToken) then
+            if JToken.IsObject then begin
+                Result := JToken.AsObject();
+                exit(true);
+            end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: JsonArray): Boolean
+    var
+        JToken: JsonToken;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JToken) then
+            if JToken.IsArray then begin
+                Result := JToken.AsArray();
+                exit(true);
+            end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: JsonValue): Boolean
+    var
+        JToken: JsonToken;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JToken) then
+            if JToken.IsValue then begin
+                Result := JToken.AsValue();
+                exit(true);
+            end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Text): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsText();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Code[2048]): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := CopyStr(JValue.AsCode(), 1, MaxStrLen(Result));
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Integer): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsInteger();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Decimal): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsDecimal();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: BigInteger): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsBigInteger();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Boolean): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsBoolean();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Byte): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsByte();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Char): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsChar();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Date): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsDate();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Time): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsTime();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: DateTime): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsDateTime();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: Duration): Boolean
+    var
+        JValue: JsonValue;
+    begin
+        if TrySelectToken(JObject, JPathQuery, JValue) then begin
+            Result := JValue.AsDuration();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectToken(JObject: JsonObject; JPathQuery: Text; var Result: JsonToken): Boolean
+    begin
+        exit(JObject.SelectToken(JPathQuery, Result));
+    end;
+
+    procedure SelectTokenAsObject(JObject: JsonObject; JPathQuery: Text) Result: JsonObject
+    begin
+        exit(SelectToken(JObject, JPathQuery).AsObject());
+    end;
+
+    procedure SelectTokenAsArray(JObject: JsonObject; JPathQuery: Text) Result: JsonArray
+    begin
+        exit(SelectToken(JObject, JPathQuery).AsArray());
+    end;
+
+    procedure SelectTokenAsValue(JObject: JsonObject; JPathQuery: Text) Result: JsonValue
+    begin
+        exit(SelectToken(JObject, JPathQuery).AsValue());
+    end;
+
+    procedure SelectTokenAsText(JObject: JsonObject; JPathQuery: Text) Result: Text
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsText());
+    end;
+
+    procedure SelectTokenAsCode(JObject: JsonObject; JPathQuery: Text) Result: Code[2048]
+    begin
+        exit(CopyStr(SelectTokenAsValue(JObject, JPathQuery).AsCode(), 1, MaxStrLen(Result)));
+    end;
+
+    procedure SelectTokenAsInteger(JObject: JsonObject; JPathQuery: Text) Result: Integer
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsInteger());
+    end;
+
+    procedure SelectTokenAsDecimal(JObject: JsonObject; JPathQuery: Text) Result: Decimal
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsDecimal());
+    end;
+
+    procedure SelectTokenAsBigInteger(JObject: JsonObject; JPathQuery: Text) Result: BigInteger
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsBigInteger());
+    end;
+
+    procedure SelectTokenAsBoolean(JObject: JsonObject; JPathQuery: Text) Result: Boolean
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsBoolean());
+    end;
+
+    procedure SelectTokenAsByte(JObject: JsonObject; JPathQuery: Text) Result: Byte
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsByte());
+    end;
+
+    procedure SelectTokenAsChar(JObject: JsonObject; JPathQuery: Text) Result: Char
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsChar());
+    end;
+
+    procedure SelectTokenAsDate(JObject: JsonObject; JPathQuery: Text) Result: Date
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsDate());
+    end;
+
+    procedure SelectTokenAsTime(JObject: JsonObject; JPathQuery: Text) Result: Time
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsTime());
+    end;
+
+    procedure SelectTokenAsDateTime(JObject: JsonObject; JPathQuery: Text) Result: DateTime
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsDateTime());
+    end;
+
+    procedure SelectTokenAsDuration(JObject: JsonObject; JPathQuery: Text) Result: Duration
+    begin
+        exit(SelectTokenAsValue(JObject, JPathQuery).AsDuration());
+    end;
+
+    procedure SelectToken(JObject: JsonObject; JPathQuery: Text) Result: JsonToken
+    begin
+        JObject.SelectToken(JPathQuery, Result);
+        exit(Result);
+    end;
+
+    procedure Variant2JsonToken(DataVariant: Variant): JsonToken
+    var
+        JArray: JsonArray;
+        JObject: JsonObject;
+        JToken: JsonToken;
+    begin
+        case DataVariant of
+            DataVariant.IsJsonArray:
+                begin
+                    JArray := DataVariant;
+                    exit(JArray.AsToken());
+                end;
+            DataVariant.IsJsonObject:
+                begin
+                    JObject := DataVariant;
+                    exit(JObject.AsToken());
+                end;
+            DataVariant.IsJsonToken:
+                begin
+                    JToken := DataVariant;
+                    exit(JToken);
+                end;
+            DataVariant.IsJsonValue:
+                exit(Variant2JsonValue(DataVariant).AsToken());
+        end;
+    end;
+
+    procedure Variant2JsonValue(DataVariant: Variant): JsonValue
+    var
+        JsonVal: JsonValue;
+    begin
+        case DataVariant of
+            DataVariant.IsBigInteger():
+                JsonVal.SetValue(Variant2BigInteger(DataVariant));
+            DataVariant.IsBoolean():
+                JsonVal.SetValue(Variant2Boolean(DataVariant));
+            DataVariant.IsByte():
+                JsonVal.SetValue(Variant2Byte(DataVariant));
+            DataVariant.IsChar():
+                JsonVal.SetValue(Variant2Char(DataVariant));
+            DataVariant.IsCode():
+                JsonVal.SetValue(Variant2Code(DataVariant));
+            DataVariant.IsDate():
+                JsonVal.SetValue(Variant2Date(DataVariant));
+            DataVariant.IsTime():
+                JsonVal.SetValue(Variant2Time(DataVariant));
+            DataVariant.IsDateTime():
+                JsonVal.SetValue(CreateDateTime(Variant2Date(DataVariant), Variant2Time(DataVariant)));
+            DataVariant.IsDecimal():
+                JsonVal.SetValue(Variant2Decimal(DataVariant));
+            DataVariant.IsDuration():
+                JsonVal.SetValue(Variant2Duration(DataVariant));
+            DataVariant.IsGuid():
+                JsonVal.SetValue(Variant2Guid(DataVariant));
+            DataVariant.IsOption():
+                JsonVal.SetValue(Variant2Option(DataVariant));
+            DataVariant.IsInteger():
+                JsonVal.SetValue(Variant2Integer(DataVariant));
+            DataVariant.IsRecordId():
+                JsonVal.SetValue(Variant2RecordId(DataVariant));
+            DataVariant.IsText():
+                JsonVal.SetValue(Variant2Text(DataVariant));
+            DataVariant.IsTextBuilder():
+                JsonVal.SetValue(Variant2TextBuilder(DataVariant).ToText());
+            DataVariant.IsXmlText():
+                JsonVal.SetValue(Variant2XmlText(DataVariant).Value());
+            else
+                JsonVal.SetValueToUndefined();
+        end;
+
+        exit(JsonVal);
+    end;
+
+    procedure FieldRefToJsonValue(var RecordRef: RecordRef; FieldIndex: Integer): JsonValue
+    var
+        FieldRef: FieldRef;
+    begin
+        FieldRef := RecordRef.FieldIndex(FieldIndex);
+        exit(FieldRefToJsonValue(FieldRef));
+    end;
+
+    procedure FieldRefToJsonValue(var FieldRef: FieldRef): JsonValue
+    var
+        JsonVal: JsonValue;
+    begin
+        case FieldRef.Type() of
+            FieldRef.Type() ::BigInteger:
+                JsonVal.SetValue(FieldRef2BigInteger(FieldRef));
+            FieldRef.Type() ::Blob:
+                JsonVal.SetValue(FieldRefBlob2Base64(FieldRef));
+            FieldRef.Type() ::Boolean:
+                JsonVal.SetValue(FieldRef2Boolean(FieldRef));
+            FieldRef.Type() ::Code:
+                JsonVal.SetValue(FieldRef2Code(FieldRef));
+            FieldRef.Type() ::Date:
+                JsonVal.SetValue(FieldRef2Date(FieldRef));
+            FieldRef.Type() ::DateTime:
+                JsonVal.SetValue(FieldRef2DateTime(FieldRef));
+            FieldRef.Type() ::Decimal:
+                JsonVal.SetValue(FieldRef2Decimal(FieldRef));
+            FieldRef.Type() ::Duration:
+                JsonVal.SetValue(FieldRef2Duration(FieldRef));
+            FieldRef.Type() ::Guid:
+                JsonVal.SetValue(FieldRef2Guid(FieldRef));
+            FieldRef.Type() ::Integer:
+                JsonVal.SetValue(FieldRef2Integer(FieldRef));
+            FieldRef.Type() ::Media:
+                JsonVal.SetValue(FieldRefMedia2Base64(FieldRef));
+            FieldRef.Type() ::MediaSet:
+                JsonVal.SetValue(FieldRefMediaSet2Base64(FieldRef));
+            FieldRef.Type() ::Option:
+                JsonVal.SetValue(FieldRef2Option(FieldRef));
+            FieldRef.Type() ::RecordId:
+                JsonVal.SetValue(FieldRef2RecordId(FieldRef));
+            FieldRef.Type() ::Text:
+                JsonVal.SetValue(FieldRef2Text(FieldRef));
+            FieldRef.Type() ::Time:
+                JsonVal.SetValue(FieldRef2Time(FieldRef));
+            else
+                JsonVal.SetValueToNull();
+        end;
+
+        exit(JsonVal);
+    end;
+
+    procedure Serialize(Data: RecordId; IncludeTimestamp: Boolean; var Result: JsonObject): Boolean
+    var
+        RecordRef: RecordRef;
+        i: Integer;
+        StartIndex: Integer;
+    begin
+        if not RecordRef.Get(Data) then
+            exit(false);
+
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        for i := StartIndex to RecordRef.FieldCount do
+            Result.Add(RecordRef.FieldIndex(i).Name(), FieldRefToJsonValue(RecordRef, i));
+
+        exit(true);
+    end;
+
+    procedure Serialize(Data: RecordId; FieldNumbers: List of [Integer]; var Result: JsonObject): Boolean
+    var
+        RecordRef: RecordRef;
+        i: Integer;
+    begin
+        if not RecordRef.Get(Data) then
+            exit(false);
+
+        if FieldNumbers.Count() = 0 then
+            exit(false);
+
+        for i := 1 to FieldNumbers.Count() do
+            Result.Add(RecordRef.Field(FieldNumbers.Get(i)).Name(), FieldRefToJsonValue(RecordRef, i));
+
+        exit(true);
+    end;
+
+    procedure Serialize(DataRecordId: RecordId; var Result: JsonObject): Boolean
+    begin
+        exit(Serialize(DataRecordId, false, Result));
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; var Result: JsonArray): Boolean
+    var
+        JObject: JsonObject;
+        i: Integer;
+        StartIndex: Integer;
+    begin
+        if not SourceRecordRef.FindSet() then
+            exit(false);
+
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        repeat
+            Clear(JObject);
+            for i := StartIndex to SourceRecordRef.FieldCount() do
+                JObject.Add(SourceRecordRef.FieldIndex(i).Name(), FieldRefToJsonValue(SourceRecordRef, i));
+
+            Result.Add(JObject);
+        until SourceRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var Result: JsonArray): Boolean
+    var
+        JObject: JsonObject;
+        i: Integer;
+        StartIndex: Integer;
+        JsonKeyName: Text;
+    begin
+        if not SourceRecordRef.FindSet() then
+            exit(false);
+
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        repeat
+            Clear(JObject);
+            for i := StartIndex to SourceRecordRef.FieldCount() do
+                if FieldNoJsonKeyNameMapping.Get(SourceRecordRef.FieldIndex(i).Number(), JsonKeyName) then
+                    JObject.Add(JsonKeyName, FieldRefToJsonValue(SourceRecordRef, i))
+                else
+                    JObject.Add(SourceRecordRef.FieldIndex(i).Name(), FieldRefToJsonValue(SourceRecordRef, i));
+
+            Result.Add(JObject);
+        until SourceRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; var Result: JsonObject): Boolean
+    var
+        i: Integer;
+        StartIndex: Integer;
+    begin
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        for i := StartIndex to SourceRecordRef.FieldCount() do
+            Result.Add(SourceRecordRef.FieldIndex(i).Name(), FieldRefToJsonValue(SourceRecordRef, i));
+
+        exit(true);
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var Result: JsonObject): Boolean
+    var
+        i: Integer;
+        StartIndex: Integer;
+        JsonKeyName: Text;
+    begin
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        for i := StartIndex to SourceRecordRef.FieldCount() do
+            if FieldNoJsonKeyNameMapping.Get(SourceRecordRef.FieldIndex(i).Number(), JsonKeyName) then
+                Result.Add(JsonKeyName, FieldRefToJsonValue(SourceRecordRef, i))
+            else
+                Result.Add(SourceRecordRef.FieldIndex(i).Name(), FieldRefToJsonValue(SourceRecordRef, i));
+
+        exit(true);
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; FieldNumbers: List of [Integer]; var Result: JsonArray): Boolean
+    var
+        JObject: JsonObject;
+        i: Integer;
+    begin
+        if not SourceRecordRef.FindSet() then
+            exit(false);
+
+        if FieldNumbers.Count() = 0 then
+            exit;
+
+        repeat
+            Clear(JObject);
+            for i := 1 to FieldNumbers.Count() do
+                JObject.Add(SourceRecordRef.Field(FieldNumbers.Get(i)).Name(), FieldRefToJsonValue(SourceRecordRef, i));
+
+            Result.Add(JObject);
+        until SourceRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+
+    /// <summary> 
+    /// Serializes multiple tables into JsonArrays attached to one JsonObject which is returned.
+    /// </summary>
+    /// <param name="Data">Parameter of type array[20] of RecordRef.</param>
+    /// <param name="KeyNames">Parameter of type array[20] of Text.</param>
+    /// <param name="Result">Parameter of type JsonObject.</param>
+    /// <returns>Return value of type Boolean.</returns>
+    procedure Serialize(Data: array[20] of RecordRef; KeyNames: array[20] of Text; var Result: JsonObject): Boolean
+    var
+        JObject: JsonObject;
+        TempJArray: JsonArray;
+        i: Integer;
+    begin
+        for i := 1 to 20 do
+            if Data[i].Number() <> 0 then begin
+                Serialize(Data[i], TempJArray);
+                JObject.Add(KeyNames[i], TempJArray);
+            end;
+
+        exit(true);
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; var Result: JsonArray): Boolean
+    begin
+        exit(Serialize(SourceRecordRef, false, Result));
+    end;
+
+    procedure Serialize(SourceRecordRef: RecordRef; var Result: JsonObject): Boolean
+    begin
+        exit(Serialize(SourceRecordRef, false, Result));
+    end;
+
+    procedure Serialize(DataVariant: Variant; var Result: JsonArray): Boolean
+    var
+        DataTypeManagement: Codeunit "Data Type Management";
+        RecordRef: RecordRef;
+    begin
+        case DataVariant of
+            DataVariant.IsRecord,
+            DataVariant.IsRecordRef:
+                begin
+                    DataTypeManagement.GetRecordRef(DataVariant, RecordRef);
+                    exit(Serialize(RecordRef, Result))
+                end;
+        end;
+    end;
+
+    procedure Serialize(DataVariant: Variant; var Result: JsonObject): Boolean
+    var
+        DataTypeManagement: Codeunit "Data Type Management";
+        RecId: RecordId;
+        RecordRef: RecordRef;
+    begin
+        if DataVariant.IsRecordId then begin
+            RecId := DataVariant;
+            exit(Serialize(RecId, Result));
+        end;
+
+        if (DataVariant.IsRecordRef) or (DataVariant.IsRecord) then begin
+            DataTypeManagement.GetRecordRef(DataVariant, RecordRef);
+            exit(Serialize(RecordRef, Result));
+        end;
+    end;
+
+    procedure SerializePopulated(DataRecordId: RecordId; IncludeTimestamp: Boolean; var Result: JsonObject): Boolean
+    var
+        RecordRef: RecordRef;
+        i: Integer;
+        StartIndex: Integer;
+    begin
+        if not RecordRef.Get(DataRecordId) then
+            exit(false);
+
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        for i := StartIndex to RecordRef.FieldCount do
+            AddValueIfNotBlank(Result, RecordRef.FieldIndex(i).Name(), RecordRef, i);
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(DataRecordId: RecordId; FieldNumbers: List of [Integer]; var Result: JsonObject): Boolean
+    var
+        RecordRef: RecordRef;
+        i: Integer;
+    begin
+        if not RecordRef.Get(DataRecordId) then
+            exit(false);
+
+        if FieldNumbers.Count() = 0 then
+            exit(false);
+
+        for i := 1 to FieldNumbers.Count() do
+            AddValueIfNotBlank(Result, RecordRef.Field(FieldNumbers.Get(i)).Name(), RecordRef, i);
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(DataRecordId: RecordId; var Result: JsonObject): Boolean
+    begin
+        exit(SerializePopulated(DataRecordId, false, Result));
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; var Result: JsonArray): Boolean
+    var
+        JObject: JsonObject;
+        i: Integer;
+        StartIndex: Integer;
+    begin
+        if not SourceRecordRef.FindSet() then
+            exit(false);
+
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        repeat
+            Clear(JObject);
+            for i := StartIndex to SourceRecordRef.FieldCount() do
+                AddValueIfNotBlank(JObject, SourceRecordRef.FieldIndex(i).Name(), SourceRecordRef, i);
+
+            Result.Add(JObject);
+        until SourceRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var Result: JsonArray): Boolean
+    var
+        JObject: JsonObject;
+        i: Integer;
+        StartIndex: Integer;
+        JsonKeyName: Text;
+    begin
+        if not SourceRecordRef.FindSet() then
+            exit(false);
+
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        repeat
+            Clear(JObject);
+            for i := StartIndex to SourceRecordRef.FieldCount() do
+                if FieldNoJsonKeyNameMapping.Get(SourceRecordRef.FieldIndex(i).Number(), JsonKeyName) then
+                    AddValueIfNotBlank(JObject, JsonKeyName, SourceRecordRef, i)
+                else
+                    AddValueIfNotBlank(JObject, SourceRecordRef.FieldIndex(i).Name(), SourceRecordRef, i);
+
+            Result.Add(JObject);
+        until SourceRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; var Result: JsonObject): Boolean
+    var
+        i: Integer;
+        StartIndex: Integer;
+    begin
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        for i := StartIndex to SourceRecordRef.FieldCount() do
+            AddValueIfNotBlank(Result, SourceRecordRef.FieldIndex(i).Name(), SourceRecordRef, i);
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; IncludeTimestamp: Boolean; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var Result: JsonObject): Boolean
+    var
+        i: Integer;
+        StartIndex: Integer;
+        JsonKeyName: Text;
+    begin
+        if IncludeTimestamp then
+            StartIndex := 0
+        else
+            StartIndex := 1;
+
+        for i := StartIndex to SourceRecordRef.FieldCount() do
+            if FieldNoJsonKeyNameMapping.Get(SourceRecordRef.FieldIndex(i).Number(), JsonKeyName) then
+                AddValueIfNotBlank(Result, JsonKeyName, SourceRecordRef, i)
+            else
+                AddValueIfNotBlank(Result, SourceRecordRef.FieldIndex(i).Name(), SourceRecordRef, i);
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; FieldNumbers: List of [Integer]; var Result: JsonArray): Boolean
+    var
+        JObject: JsonObject;
+        i: Integer;
+    begin
+        if not SourceRecordRef.FindSet() then
+            exit(false);
+
+        if FieldNumbers.Count() = 0 then
+            exit;
+
+        repeat
+            Clear(JObject);
+            for i := 1 to FieldNumbers.Count() do
+                AddValueIfNotBlank(JObject, SourceRecordRef.Field(FieldNumbers.Get(i)).Name(), SourceRecordRef, i);
+
+            Result.Add(JObject);
+        until SourceRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+
+    /// <summary> 
+    /// Serializes multiple tables into JsonArrays attached to one JsonObject which is returned.
+    /// </summary>
+    /// <param name="Data">Parameter of type array[20] of RecordRef.</param>
+    /// <param name="KeyNames">Parameter of type array[20] of Text.</param>
+    /// <param name="Result">Parameter of type JsonObject.</param>
+    /// <returns>Return value of type Boolean.</returns>
+    procedure SerializePopulated(Data: array[20] of RecordRef; KeyNames: array[20] of Text; var Result: JsonObject): Boolean
+    var
+        JObject: JsonObject;
+        TempJArray: JsonArray;
+        i: Integer;
+    begin
+        for i := 1 to 20 do
+            if Data[i].Number() <> 0 then begin
+                SerializePopulated(Data[i], TempJArray);
+                JObject.Add(KeyNames[i], TempJArray);
+            end;
+
+        exit(true);
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; var Result: JsonArray): Boolean
+    begin
+        exit(SerializePopulated(SourceRecordRef, false, Result));
+    end;
+
+    procedure SerializePopulated(SourceRecordRef: RecordRef; var Result: JsonObject): Boolean
+    begin
+        exit(SerializePopulated(SourceRecordRef, false, Result));
+    end;
+
+    procedure SerializePopulated(DataVariant: Variant; var Result: JsonArray): Boolean
+    var
+        DataTypeManagement: Codeunit "Data Type Management";
+        RecordRef: RecordRef;
+    begin
+        case DataVariant of
+            DataVariant.IsRecord,
+            DataVariant.IsRecordRef:
+                begin
+                    DataTypeManagement.GetRecordRef(DataVariant, RecordRef);
+                    exit(SerializePopulated(RecordRef, Result))
+                end;
+        end;
+    end;
+
+    procedure SerializePopulated(DataVariant: Variant; var Result: JsonObject): Boolean
+    var
+        DataTypeManagement: Codeunit "Data Type Management";
+        RId: RecordId;
+        RecordRef: RecordRef;
+    begin
+        if DataVariant.IsRecordId then begin
+            RId := DataVariant;
+            exit(SerializePopulated(RId, Result));
+        end;
+
+        if (DataVariant.IsRecordRef) or (DataVariant.IsRecord) then begin
+            DataTypeManagement.GetRecordRef(DataVariant, RecordRef);
+            exit(SerializePopulated(RecordRef, Result));
+        end;
+    end;
+
+    procedure Deserialize(Data: JsonObject; TableNo: Integer; var ResultRecordRef: RecordRef)
+    var
+        i: Integer;
+        j: Integer;
+    begin
+        if Data.Keys.Count() = 0 then
+            exit;
+
+        ResultRecordRef.Open(TableNo);
+        for i := 1 to Data.Keys.Count() do
+            for j := 1 to ResultRecordRef.FieldCount do
+                if Data.Keys.Get(i) = ResultRecordRef.FieldIndex(j).Name() then
+                    AddGenericJsonValue(ResultRecordRef, j, Data.Values.Get(i).AsValue());
+    end;
+
+    procedure Deserialize(Data: JsonObject; TableNo: Integer; RunTrigger: Boolean)
+    var
+        RecordRef: RecordRef;
+        i: Integer;
+        j: Integer;
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing.
+        if Data.Keys.Count() = 0 then
+            exit;
+
+        RecordRef.Open(TableNo);
+        for i := 1 to Data.Keys.Count() do
+            for j := 1 to RecordRef.FieldCount do
+                if Data.Keys.Get(i) = RecordRef.FieldIndex(j).Name() then
+                    AddGenericJsonValue(RecordRef, j, Data.Values.Get(i).AsValue());
+
+        if not RecordRef.Insert(RunTrigger) then
+            RecordRef.Modify(RunTrigger);
+
+        RecordRef.Close();
+    end;
+
+    procedure Deserialize(Data: JsonObject; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var ResultRecordRef: RecordRef)
+    var
+        i: Integer;
+        j: Integer;
+        JsonKeyName: Text;
+    begin
+        if Data.Keys.Count() = 0 then
+            exit;
+
+        ResultRecordRef.Open(TableNo);
+        for i := 1 to Data.Keys.Count() do
+            for j := 1 to ResultRecordRef.FieldCount do
+                if FieldNoJsonKeyNameMapping.Get(ResultRecordRef.FieldIndex(j).Number(), JsonKeyName) then
+                    if Data.Keys.Get(i) = JsonKeyName then
+                        AddGenericJsonValue(ResultRecordRef, j, Data.Values.Get(i).AsValue())
+                    else
+                        if Data.Keys.Get(i) = ResultRecordRef.FieldIndex(j).Name() then
+                            AddGenericJsonValue(ResultRecordRef, j, Data.Values.Get(i).AsValue());
+    end;
+
+    procedure Deserialize(Data: JsonObject; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; RunTrigger: Boolean)
+    var
+        RecordRef: RecordRef;
+        i: Integer;
+        j: Integer;
+        JsonKeyName: Text;
+    begin
+        if Data.Keys.Count() = 0 then
+            exit;
+
+        RecordRef.Open(TableNo);
+        for i := 1 to Data.Keys.Count() do
+            for j := 1 to RecordRef.FieldCount do
+                if FieldNoJsonKeyNameMapping.Get(RecordRef.FieldIndex(j).Number(), JsonKeyName) then
+                    if Data.Keys.Get(i) = JsonKeyName then
+                        AddGenericJsonValue(RecordRef, j, Data.Values.Get(i).AsValue())
+                    else
+                        if Data.Keys.Get(i) = RecordRef.FieldIndex(j).Name() then
+                            AddGenericJsonValue(RecordRef, j, Data.Values.Get(i).AsValue());
+
+        if not RecordRef.Insert(RunTrigger) then
+            RecordRef.Modify(RunTrigger);
+
+        RecordRef.Close();
+    end;
+
+    procedure Deserialize(Data: JsonArray; TableNo: Integer; var ResultRecordRef: RecordRef)
+    var
+        JObject: JsonObject;
+        JToken: JsonToken;
+        i: Integer;
+        j: Integer;
+        k: Integer;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        ResultRecordRef.Open(TableNo, true, CompanyName);
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            JObject := JToken.AsObject();
+            ResultRecordRef.Init();
+            for j := 1 to JObject.Keys.Count() do
+                for k := 1 to ResultRecordRef.FieldCount do
+                    if JObject.Keys.Get(j) = ResultRecordRef.FieldIndex(k).Name() then
+                        AddGenericJsonValue(ResultRecordRef, k, JObject.Values.Get(j).AsValue());
+
+            if not ResultRecordRef.Insert() then
+                ResultRecordRef.Modify();
+        end;
+    end;
+
+    procedure Deserialize(Data: JsonArray; TableNo: Integer; RunTrigger: Boolean)
+    var
+        RecordRef: RecordRef;
+        JObject: JsonObject;
+        JToken: JsonToken;
+        i: Integer;
+        j: Integer;
+        k: Integer;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        RecordRef.Open(TableNo);
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            JObject := JToken.AsObject();
+            RecordRef.Init();
+            for j := 1 to JObject.Keys.Count() do
+                for k := 1 to RecordRef.FieldCount do
+                    if JObject.Keys.Get(j) = RecordRef.FieldIndex(k).Name() then
+                        AddGenericJsonValue(RecordRef, k, JObject.Values.Get(j).AsValue());
+
+            if not RecordRef.Insert(RunTrigger) then
+                RecordRef.Modify(RunTrigger);
+        end;
+        RecordRef.Close();
+    end;
+
+    procedure Deserialize(Data: JsonArray; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var ResultRecordRef: RecordRef)
+    var
+        JObject: JsonObject;
+        JToken: JsonToken;
+        i: Integer;
+        j: Integer;
+        k: Integer;
+        JsonKeyName: Text;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        ResultRecordRef.Open(TableNo, true, CompanyName);
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            JObject := JToken.AsObject();
+            ResultRecordRef.Init();
+            for j := 1 to JObject.Keys.Count() do
+                for k := 1 to ResultRecordRef.FieldCount do
+                    if FieldNoJsonKeyNameMapping.Get(ResultRecordRef.FieldIndex(k).Number(), JsonKeyName) then
+                        if JObject.Keys.Get(j) = JsonKeyName then
+                            AddGenericJsonValue(ResultRecordRef, k, JObject.Values.Get(j).AsValue())
+                        else
+                            if JObject.Keys.Get(j) = ResultRecordRef.FieldIndex(k).Name() then
+                                AddGenericJsonValue(ResultRecordRef, k, JObject.Values.Get(j).AsValue());
+
+            if not ResultRecordRef.Insert() then
+                ResultRecordRef.Modify();
+        end;
+    end;
+
+    procedure Deserialize(Data: JsonArray; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; RunTrigger: Boolean)
+    var
+        RecordRef: RecordRef;
+        JObject: JsonObject;
+        JToken: JsonToken;
+        i: Integer;
+        j: Integer;
+        k: Integer;
+        JsonKeyName: Text;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        RecordRef.Open(TableNo);
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            JObject := JToken.AsObject();
+            RecordRef.Init();
+            for j := 1 to JObject.Keys.Count() do
+                for k := 1 to RecordRef.FieldCount do
+                    if FieldNoJsonKeyNameMapping.Get(RecordRef.FieldIndex(k).Number(), JsonKeyName) then
+                        if JObject.Keys.Get(j) = JsonKeyName then
+                            AddGenericJsonValue(RecordRef, k, JObject.Values.Get(j).AsValue())
+                        else
+                            if JObject.Keys.Get(j) = RecordRef.FieldIndex(k).Name() then
+                                AddGenericJsonValue(RecordRef, k, JObject.Values.Get(j).AsValue());
+
+            if not RecordRef.Insert(RunTrigger) then
+                RecordRef.Modify(RunTrigger);
+        end;
+        RecordRef.Close();
+    end;
+
+    procedure Deserialize(Data: JsonObject; KeyNames: array[20] of Text; TableNumbers: array[20] of Integer; var Result: array[20] of RecordRef)
+    var
+        JToken: JsonToken;
+        TempJArray: JsonArray;
+        i: Integer;
+    begin
+        for i := 1 to 20 do
+            if KeyNames[i] <> '' then
+                if Data.SelectToken(KeyNames[i], JToken) then begin
+                    TempJArray := JToken.AsArray();
+                    Deserialize(TempJArray, TableNumbers[i], Result[i]);
+                end;
+    end;
+
+    procedure Deserialize(Data: JsonObject; KeyNames: array[20] of Text; TableNumbers: array[20] of Integer; RunTrigger: Boolean)
+    var
+        JToken: JsonToken;
+        TempJArray: JsonArray;
+        i: Integer;
+    begin
+        for i := 1 to 20 do
+            if KeyNames[i] <> '' then
+                if Data.SelectToken(KeyNames[i], JToken) then begin
+                    TempJArray := JToken.AsArray();
+                    Deserialize(TempJArray, TableNumbers[i], RunTrigger);
+                end;
+    end;
+
+    procedure TryDeserialize(Data: JsonObject; TableNo: Integer; var ResultRecordRef: RecordRef): Boolean
+    begin
+        exit(TryDeserializeObject(Data, TableNo, ResultRecordRef));
+    end;
+
+    procedure TryDeserialize(Data: JsonObject; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var ResultRecordRef: RecordRef): Boolean
+    begin
+        exit(TryDeserializeObject(Data, TableNo, FieldNoJsonKeyNameMapping, ResultRecordRef));
+    end;
+
+    procedure TryDeserialize(Data: JsonArray; TableNo: Integer; var ResultRecordRef: RecordRef): Boolean
+    var
+        SingleRecordRef: RecordRef;
+        TempRecordRef: RecordRef;
+        JObject: JsonObject;
+        JToken: JsonToken;
+        i: Integer;
+        j: Integer;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        ResultRecordRef.Open(TableNo, true, CompanyName);
+        TempRecordRef.Open(TableNo, true, CompanyName);
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            JObject := JToken.AsObject();
+            Clear(SingleRecordRef);
+            if not TryDeserialize(JObject, TableNo, SingleRecordRef) then
+                exit(false);
+
+            for j := 1 to SingleRecordRef.FieldCount do
+                TempRecordRef.FieldIndex(j).Value := SingleRecordRef.FieldIndex(j).Value;
+
+            if not TempRecordRef.Insert() then
+                TempRecordRef.Modify();
+        end;
+
+        if TempRecordRef.FindSet() then
+            repeat
+                TransferFields(TempRecordRef, ResultRecordRef);
+                if not ResultRecordRef.Insert() then
+                    ResultRecordRef.Modify();
+
+            until TempRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure TryDeserialize(Data: JsonArray; TableNo: Integer; RunTrigger: Boolean): Boolean
+    var
+        RecordRef: RecordRef;
+        TempRecordRef: RecordRef;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        RecordRef.Open(TableNo);
+        if not TryDeserialize(Data, TableNo, TempRecordRef) then
+            exit(false);
+
+        if TempRecordRef.FindSet() then
+            repeat
+                TransferFields(TempRecordRef, RecordRef);
+                if not RecordRef.Insert(RunTrigger) then
+                    RecordRef.Modify(RunTrigger);
+
+            until TempRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure TryDeserialize(Data: JsonArray; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var ResultRecordRef: RecordRef): Boolean
+    var
+        SingleRecordRef: RecordRef;
+        TempRecordRef: RecordRef;
+        JObject: JsonObject;
+        JToken: JsonToken;
+        i: Integer;
+        j: Integer;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        ResultRecordRef.Open(TableNo, true, CompanyName);
+        TempRecordRef.Open(TableNo, true, CompanyName);
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            JObject := JToken.AsObject();
+            Clear(SingleRecordRef);
+            if not TryDeserialize(JObject, TableNo, FieldNoJsonKeyNameMapping, SingleRecordRef) then
+                exit(false);
+
+            for j := 1 to SingleRecordRef.FieldCount do
+                TempRecordRef.FieldIndex(j).Value := SingleRecordRef.FieldIndex(j).Value;
+
+            if not TempRecordRef.Insert() then
+                TempRecordRef.Modify();
+        end;
+
+        if TempRecordRef.FindSet() then
+            repeat
+                TransferFields(TempRecordRef, ResultRecordRef);
+                if not ResultRecordRef.Insert() then
+                    ResultRecordRef.Modify();
+
+            until TempRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure TryDeserialize(Data: JsonArray; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; RunTrigger: Boolean): Boolean
+    var
+        RecordRef: RecordRef;
+        TempRecordRef: RecordRef;
+    begin
+        if Data.Count() = 0 then
+            exit;
+
+        RecordRef.Open(TableNo);
+        if not TryDeserialize(Data, TableNo, FieldNoJsonKeyNameMapping, TempRecordRef) then
+            exit(false);
+
+        if TempRecordRef.FindSet() then
+            repeat
+                TransferFields(TempRecordRef, RecordRef);
+                if not RecordRef.Insert(RunTrigger) then
+                    RecordRef.Modify(RunTrigger);
+
+            until TempRecordRef.Next() = 0;
+
+        exit(true);
+    end;
+
+    procedure TryDeserialize(Data: JsonObject; KeyNames: array[20] of Text; TableNumbers: array[20] of Integer; var Result: array[20] of RecordRef): Boolean
+    var
+        JToken: JsonToken;
+        TempJArray: JsonArray;
+        i: Integer;
+    begin
+        for i := 1 to 20 do
+            if KeyNames[i] <> '' then
+                if Data.SelectToken(KeyNames[i], JToken) then begin
+                    TempJArray := JToken.AsArray();
+                    TryDeserialize(TempJArray, TableNumbers[i], Result[i]);
+                end;
+    end;
+
+    procedure TryDeserialize(Data: JsonObject; KeyNames: array[20] of Text; TableNumbers: array[20] of Integer; RunTrigger: Boolean): Boolean
+    var
+        JToken: JsonToken;
+        TempJArray: JsonArray;
+        i: Integer;
+    begin
+        for i := 1 to 20 do
+            if KeyNames[i] <> '' then
+                if Data.SelectToken(KeyNames[i], JToken) then begin
+                    TempJArray := JToken.AsArray();
+                    TryDeserialize(TempJArray, TableNumbers[i], RunTrigger);
+                end;
+    end;
+
+    [TryFunction]
+    local procedure TryDeserializeObject(Data: JsonObject; TableNo: Integer; var ResultRecordRef: RecordRef)
+    var
+        i: Integer;
+        j: Integer;
+    begin
+        ResultRecordRef.Open(TableNo);
+        for i := 1 to Data.Keys.Count() do
+            for j := 1 to ResultRecordRef.FieldCount do
+                if Data.Keys.Get(i) = ResultRecordRef.FieldIndex(j).Name() then
+                    AddGenericJsonValue(ResultRecordRef, j, Data.Values.Get(i).AsValue());
+    end;
+
+    [TryFunction]
+    local procedure TryDeserializeObject(Data: JsonObject; TableNo: Integer; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var ResultRecordRef: RecordRef)
+    var
+        i: Integer;
+        j: Integer;
+        JsonKeyName: Text;
+    begin
+        ResultRecordRef.Open(TableNo);
+        for i := 1 to Data.Keys.Count() do
+            for j := 1 to ResultRecordRef.FieldCount do
+                if FieldNoJsonKeyNameMapping.Get(ResultRecordRef.FieldIndex(j).Number(), JsonKeyName) then
+                    if Data.Keys.Get(i) = JsonKeyName then
+                        AddGenericJsonValue(ResultRecordRef, j, Data.Values.Get(i).AsValue())
+                    else
+                        if Data.Keys.Get(i) = ResultRecordRef.FieldIndex(j).Name() then
+                            AddGenericJsonValue(ResultRecordRef, j, Data.Values.Get(i).AsValue());
+    end;
+
+    procedure DeserializeHeaderLines(Data: JsonObject; TableNo: Integer; TableNoLines: Integer; LinesJsonKey: Text; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; var HeaderRecordRef: RecordRef; var LinesRecordRef: RecordRef)
+    var
+        TempHeaderRecordRef: RecordRef;
+        TempLineRecordRef: RecordRef;
+        JArrayLines: JsonArray;
+        JToken: JsonToken;
+    begin
+        HeaderRecordRef.Open(TableNo, true, CompanyName);
+        LinesRecordRef.Open(TableNoLines, true, CompanyName);
+
+        Data.Get(LinesJsonKey, JToken);
+        JArrayLines := JToken.AsArray();
+
+        Deserialize(Data, TableNo, FieldNoJsonKeyNameMapping, TempHeaderRecordRef);
+        TransferFields(TempHeaderRecordRef, HeaderRecordRef);
+        if not HeaderRecordRef.Insert() then
+            HeaderRecordRef.Modify();
+
+        Deserialize(JArrayLines, TableNo, FieldNoJsonKeyNameMapping, TempLineRecordRef);
+        TransferFields(TempLineRecordRef, LinesRecordRef);
+        if not LinesRecordRef.Insert() then
+            LinesRecordRef.Modify();
+    end;
+
+    procedure DeserializeHeaderLines(Data: JsonObject; TableNo: Integer; TableNoLines: Integer; LinesJsonKey: Text; var HeaderRecordRef: RecordRef; var LinesRecordRef: RecordRef)
+    var
+        TempHeaderRecordRef: RecordRef;
+        TempLineRecordRef: RecordRef;
+        JArrayLines: JsonArray;
+        JToken: JsonToken;
+    begin
+        HeaderRecordRef.Open(TableNo, true, CompanyName);
+        LinesRecordRef.Open(TableNoLines, true, CompanyName);
+
+        Data.Get(LinesJsonKey, JToken);
+        JArrayLines := JToken.AsArray();
+
+        Deserialize(Data, TableNo, TempHeaderRecordRef);
+        TransferFields(TempHeaderRecordRef, HeaderRecordRef);
+        if not HeaderRecordRef.Insert() then
+            HeaderRecordRef.Modify();
+
+        Deserialize(JArrayLines, TableNo, TempLineRecordRef);
+        TransferFields(TempLineRecordRef, LinesRecordRef);
+        if not LinesRecordRef.Insert() then
+            LinesRecordRef.Modify();
+    end;
+
+    procedure DeserializeHeaderLines(Data: JsonObject; TableNo: Integer; TableNoLines: Integer; LinesJsonKey: Text; FieldNoJsonKeyNameMapping: Dictionary of [Integer, Text]; RunTrigger: Boolean)
+    var
+        JArrayLines: JsonArray;
+        JToken: JsonToken;
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing.
+        Data.Get(LinesJsonKey, JToken);
+        JArrayLines := JToken.AsArray();
+        Deserialize(Data, TableNo, FieldNoJsonKeyNameMapping, RunTrigger);
+        Deserialize(JArrayLines, TableNo, FieldNoJsonKeyNameMapping, RunTrigger);
+    end;
+
+    procedure DeserializeHeaderLines(Data: JsonObject; TableNo: Integer; TableNoLines: Integer; LinesJsonKey: Text; RunTrigger: Boolean)
+    var
+        JArrayLines: JsonArray;
+        JToken: JsonToken;
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing. 
+        Data.Get(LinesJsonKey, JToken);
+        JArrayLines := JToken.AsArray();
+
+        Deserialize(Data, TableNo, RunTrigger);
+        Deserialize(JArrayLines, TableNo, RunTrigger);
+    end;
+
+    procedure DeserializeAll(Data: JsonObject; TableNoAndJsonKeys: Dictionary of [Integer, Text]; RunTrigger: Boolean)
+    var
+        JArray: JsonArray;
+        JObject: JsonObject;
+        JToken: JsonToken;
+        JsonKey: Text;
+        TableNo: Integer;
+        i: Integer;
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing. 
+        if TableNoAndJsonKeys.Count() = 0 then
+            exit;
+
+        for i := 1 to TableNoAndJsonKeys.Count() do begin
+            TableNoAndJsonKeys.Keys.Get(i, TableNo);
+            TableNoAndJsonKeys.Values.Get(i, JsonKey);
+            Data.Get(JsonKey, JToken);
+            if JToken.IsArray then begin
+                JArray := JToken.AsArray();
+                Deserialize(JArray, TableNo, RunTrigger);
+            end;
+
+            if JToken.IsObject then begin
+                JObject := JToken.AsObject();
+                Deserialize(JObject, TableNo, RunTrigger);
+            end;
+        end;
+    end;
+
+    procedure DeserializeAll(Data: JsonObject; TableNoAndJsonKeys: Dictionary of [Integer, Text])
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing.
+        DeserializeAll(Data, TableNoAndJsonKeys, false);
+    end;
+
+    procedure DeserializeAll(Data: JsonArray; TableNoAndJsonKeys: Dictionary of [Integer, Text]; RunTrigger: Boolean)
+    var
+        i: Integer;
+        JToken: JsonToken;
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing. 
+        if Data.Count() = 0 then
+            exit;
+
+        for i := 0 to Data.Count() - 1 do begin
+            Data.Get(i, JToken);
+            DeserializeAll(JToken.AsObject(), TableNoAndJsonKeys, RunTrigger);
+        end;
+    end;
+
+    procedure DeserializeAll(Data: JsonArray; TableNoAndJsonKeys: Dictionary of [Integer, Text])
+    begin
+        //WARNING: This is not a temporary record and will insert any new data or modify existing.
+        DeserializeAll(Data, TableNoAndJsonKeys, false);
+    end;
+
+    local procedure TransferFields(SourceRecordRef: RecordRef; var ResultRecordRef: RecordRef)
+    var
+        RecField: Record Field;
+        i: Integer;
+    begin
+        for i := 1 to SourceRecordRef.FieldCount do
+            if RecField.Get(ResultRecordRef.Number(), SourceRecordRef.FieldIndex(i).Number()) then
+                ResultRecordRef.FieldIndex(i).Value := SourceRecordRef.FieldIndex(i).Value;
+    end;
+
+    [TryFunction]
+    local procedure AddGenericJsonValue(var RecordRef: RecordRef; FieldIndex: Integer; JValue: JsonValue)
+    var
+        JValueNullErr: Label 'Value is null.';
+        TypeErr: Label 'Type is Unhandled.';
+    begin
+        if JValue.IsNull then
+            Error(JValueNullErr);
+
+        case RecordRef.FieldIndex(FieldIndex).Type of
+            FieldType::BigInteger:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsBigInteger();
+            FieldType::Boolean:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsBoolean();
+            FieldType::Code:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsCode();
+            FieldType::Date:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsDate();
+            FieldType::Time:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsTime();
+            FieldType::DateTime:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsDateTime();
+            FieldType::Guid:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsText();
+            FieldType::Integer:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsInteger();
+            FieldType::Decimal:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsDecimal();
+            FieldType::Text:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsText();
+            FieldType::Option:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsOption();
+            FieldType::Duration:
+                RecordRef.FieldIndex(FieldIndex).Value := JValue.AsDuration();
+            FieldType::Blob:
+                AddGenericJsonBlobValue(RecordRef, FieldIndex, JValue);
+            else
+                Error(TypeErr);
+        end;
+    end;
+
+    local procedure AddGenericJsonBlobValue(var RecordRef: RecordRef; FieldIndex: Integer; JValue: JsonValue)
+    var
+        TempBlob: Codeunit "Temp Blob";
+        OutStream: OutStream;
+    begin
+        if RecordRef.FieldIndex(FieldIndex).Type <> RecordRef.FieldIndex(FieldIndex).Type::Blob then
+            exit;
+
+        TempBlob.CreateOutStream(OutStream);
+        OutStream.WriteText(JValue.AsText(), StrLen(JValue.AsText()));
+        RecordRef.FieldIndex(FieldIndex).Value := TempBlob;
+    end;
+
+    local procedure Variant2BigInteger(ValVariant: Variant): BigInteger
+    var
+        Result: BigInteger;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Boolean(ValVariant: Variant): Boolean
+    var
+        Result: Boolean;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Byte(ValVariant: Variant): Byte
+    var
+        Result: Byte;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Char(ValVariant: Variant): Char
+    var
+        Result: Char;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Code(ValVariant: Variant): Code[2048]
+    var
+        Result: Code[2048];
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Decimal(ValVariant: Variant): Decimal
+    var
+        Result: Decimal;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Duration(ValVariant: Variant): Duration
+    var
+        Result: Duration;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Guid(ValVariant: Variant): Guid
+    var
+        Result: Guid;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Option(ValVariant: Variant): Option
+    var
+        Result: Option;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2Integer(ValVariant: Variant): Integer
+    var
+        Result: Integer;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2RecordId(ValVariant: Variant): Text
+    var
+        Result: Text;
+    begin
+        Result := Format(ValVariant);
+        exit(Result);
+    end;
+
+    local procedure Variant2Text(ValVariant: Variant): Text
+    var
+        Result: Text;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2TextBuilder(ValVariant: Variant): TextBuilder
+    var
+        Result: TextBuilder;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure Variant2XmlText(ValVariant: Variant): XmlText
+    var
+        Result: XmlText;
+    begin
+        Result := ValVariant;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2BigInteger(var FieldRef: FieldRef): BigInteger
+    var
+        Result: BigInteger;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Boolean(var FieldRef: FieldRef): Boolean
+    var
+        Result: Boolean;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Code(var FieldRef: FieldRef): Code[2048]
+    var
+        Result: Code[2048];
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Date(var FieldRef: FieldRef): Date
+    var
+        Result: Date;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2DateTime(var FieldRef: FieldRef): DateTime
+    var
+        Result: DateTime;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Decimal(var FieldRef: FieldRef): Decimal
+    var
+        Result: Decimal;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Duration(var FieldRef: FieldRef): Duration
+    var
+        Result: Duration;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Guid(var FieldRef: FieldRef): Guid
+    var
+        Result: Guid;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Option(var FieldRef: FieldRef): Option
+    var
+        Result: Option;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Integer(var FieldRef: FieldRef): Integer
+    var
+        Result: Integer;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2RecordId(var FieldRef: FieldRef): Text
+    var
+        Result: Text;
+    begin
+        Result := Format(FieldRef.Value);
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Text(var FieldRef: FieldRef): Text
+    var
+        Result: Text;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRef2Time(var FieldRef: FieldRef): Time
+    var
+        Result: Time;
+    begin
+        Result := FieldRef.Value;
+        exit(Result);
+    end;
+
+    local procedure FieldRefBlob2Base64(var FieldRef: FieldRef): Text
+    var
+        TempBlob: Codeunit "Temp Blob";
+        Base64Convert: Codeunit "Base64 Convert";
+        InStream: InStream;
+    begin
+        TempBlob.FromFieldRef(FieldRef);
+        if not TempBlob.HasValue() then
+            exit('');
+
+        TempBlob.CreateInStream(InStream);
+        exit(Base64Convert.ToBase64(InStream));
+    end;
+
+    local procedure FieldRefMedia2Base64(var FieldRef: FieldRef): Text
+    var
+        TenantMedia: Record "Tenant Media";
+        TenantMediaThumbnails: Record "Tenant Media Thumbnails";
+        TempBlob: Codeunit "Temp Blob";
+        Base64Convert: Codeunit "Base64 Convert";
+        TempGUID: Guid;
+        InStream: InStream;
+    begin
+        TempGUID := FieldRef.Value;
+        if TenantMedia.Get(TempGUID) then begin
+            TenantMediaThumbnails.SetRange("Media ID", TenantMedia.ID);
+            if TenantMediaThumbnails.FindFirst() then
+                TempBlob.FromRecord(TenantMediaThumbnails, TenantMediaThumbnails.FieldNo(Content))
+            else
+                TempBlob.FromRecord(TenantMedia, TenantMedia.FieldNo(Content));
+        end;
+
+        if not TempBlob.HasValue() then
+            exit('');
+
+        TempBlob.CreateInStream(InStream);
+        exit(Base64Convert.ToBase64(InStream));
+    end;
+
+    local procedure FieldRefMediaSet2Base64(var FieldRef: FieldRef): Text
+    var
+        TenantMedia: Record "Tenant Media";
+        TenantMediaSet: Record "Tenant Media Set";
+        TenantMediaThumbnails: Record "Tenant Media Thumbnails";
+        TempBlob: Codeunit "Temp Blob";
+        Base64Convert: Codeunit "Base64 Convert";
+        TempGUID: Guid;
+        InStream: InStream;
+    begin
+        TempGUID := FieldRef.Value;
+        TenantMediaSet.SetRange(ID, TempGUID);
+        if TenantMediaSet.FindFirst() then begin
+            TenantMediaThumbnails.SetRange("Media ID", TenantMediaSet."Media ID".MediaId);
+            if TenantMediaThumbnails.FindFirst() then
+                TempBlob.FromRecord(TenantMediaThumbnails, TenantMediaThumbnails.FieldNo(Content))
+            else begin
+                TenantMedia.Get(TenantMediaSet."Media ID".MediaId);
+                TempBlob.FromRecord(TenantMedia, TenantMedia.FieldNo(Content));
+            end;
+        end;
+
+        if not TempBlob.HasValue() then
+            exit('');
+
+        TempBlob.CreateInStream(InStream);
+        exit(Base64Convert.ToBase64(InStream));
+    end;
+}
