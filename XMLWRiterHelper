@@ -1,0 +1,103 @@
+codeunit 60008 "CLE002_DTSHelper"
+{
+    Access = Internal;
+
+    procedure WriteDeliveryNoteHead(DTSCode: Code[20]; CustomerNo: Code[20]; var HeaderXMLWriter: Codeunit XmlWriter; Type: Code[20])
+    var
+        DTSEnvironment: Record CLE002_DTSEnvironment;
+    begin
+        if not DTSEnvironment.Get(DTSCode) then
+            DTSEnvironment.Get();
+
+        HeaderXMLWriter.WriteStartElement('DeliveryNoteHead');
+
+        //Schema 
+        HeaderXMLWriter.WriteStartElement('Schema');
+        HeaderXMLWriter.WriteElementString('Version', DTSEnvironment.CLE002_Version);
+        HeaderXMLWriter.WriteEndElement();
+
+        //Parameters
+        HeaderXMLWriter.WriteStartElement('Parameters');
+        HeaderXMLWriter.WriteElementString('Language', DTSEnvironment.CLE002_Language);
+        HeaderXMLWriter.WriteElementString('DecimalSeparator', DTSEnvironment.CLE002_DecimalSeparator);
+        HeaderXMLWriter.WriteElementString('Precision', Format(DTSEnvironment.CLE002_Precision));
+        HeaderXMLWriter.WriteEndElement();
+
+        //Originating software
+        HeaderXMLWriter.WriteStartElement('OriginatingSoftware');
+        HeaderXMLWriter.WriteElementString('SoftwareManufacturer', DTSEnvironment.CLE002_SoftwareManufacturer);
+        HeaderXMLWriter.WriteElementString('SoftwareProduct', DTSEnvironment.CLE002_SoftwareProduct);
+        HeaderXMLWriter.WriteElementString('SoftwareVersion', Format(DTSEnvironment.CLE002_SoftwareVersion));
+        HeaderXMLWriter.WriteEndElement();
+
+        //<DeliveryNoteType Code="ASN">Delivery Note</DeliveryNoteType>
+        HeaderXMLWriter.WriteStartElement('DeliveryNoteType');
+        HeaderXMLWriter.WriteAttributeString('Code', Type);
+        HeaderXMLWriter.WriteString(DTSEnvironment.CLE002_DeliveryNoteType);
+        HeaderXMLWriter.WriteEndElement();
+
+        //<Function Code="FID">Firm Delivery Note</Function>
+        HeaderXMLWriter.WriteStartElement('Function');
+        HeaderXMLWriter.WriteAttributeString('Code', 'FID');
+        HeaderXMLWriter.WriteString(DTSEnvironment.CLE002_Function);
+        HeaderXMLWriter.WriteEndElement();
+
+        HeaderXMLWriter.WriteElementString('Checksum', Format(DTSEnvironment.CLE002_Checksum));
+
+        HeaderXMLWriter.WriteEndElement(); //DeliveryNoteHead
+    end;
+
+    procedure WriteSupplier(DTSCode: Code[20]; CustomerNo: Code[20]; var HeaderXMLWriter: Codeunit XmlWriter; Type: Code[20])
+    var
+        DTSEnvironment: Record CLE002_DTSEnvironment;
+        Customer: Record Customer;
+        CompanyInformation: Record "Company Information";
+    begin
+        if not DTSEnvironment.Get(DTSCode) then
+            DTSEnvironment.Get();
+        if not Customer.Get(CustomerNo) then
+            Clear(Customer);
+        CompanyInformation.Get();
+
+        HeaderXMLWriter.WriteStartElement('Supplier');
+
+        HeaderXMLWriter.WriteStartElement('SupplierReferences');
+        HeaderXMLWriter.WriteElementString('BuyersCodeForSupplier', Customer."No.");    //<BuyersCodeForSupplier>CLE17</BuyersCodeForSupplier>
+        HeaderXMLWriter.WriteElementString('GLN', DTSEnvironment.CLE002_SupplierGLN);   //<GLN>Supplier EAN Code</GLN> 5017625000006
+        HeaderXMLWriter.WriteEndElement();                                              //</SupplierReferences>
+
+        HeaderXMLWriter.WriteElementString('Party', CompanyInformation.Name);           //<Party>Cleland McIver Limited</Party>
+        HeaderXMLWriter.WriteElementString('Address', CompanyInformation.Address);      //<Address/>
+        HeaderXMLWriter.WriteEndElement();                                              //</Supplier>
+    end;
+
+    procedure WriteBuyer(DTSCode: Code[20]; CustomerNo: Code[20]; var HeaderXMLWriter: Codeunit XmlWriter; Type: Code[20])
+    var
+        DTSEnvironment: Record CLE002_DTSEnvironment;
+        Customer: Record Customer;
+    begin
+        if not DTSEnvironment.Get(DTSCode) then
+            DTSEnvironment.Get();
+        if not Customer.Get(CustomerNo) then
+            Clear(Customer);
+
+        HeaderXMLWriter.WriteStartElement('Buyer');                                     //<Buyer>
+        HeaderXMLWriter.WriteStartElement('BuyerReferences');                           //<BuyerReferences>
+        HeaderXMLWriter.WriteElementString('GLN', DTSEnvironment.CLE002_BuyerGLN);      //<GLN>5050210000012</GLN>
+        HeaderXMLWriter.WriteEndElement();                                              //</BuyerReferences>
+        HeaderXMLWriter.WriteElementString('Party', Customer.Name);                     //<Party>Dunelm(Soft Furnishings) Ltd</Party>
+        HeaderXMLWriter.WriteElementString('Address', Customer.Address);                //<Address/>
+        HeaderXMLWriter.WriteStartElement('Contact');                                   //<Contact>
+        HeaderXMLWriter.WriteElementString('Name', Customer.Contact);                   //<Name/>
+        HeaderXMLWriter.WriteElementString('Department', '');                           //<Department/>
+        HeaderXMLWriter.WriteEndElement();                                              //</Contact>
+        HeaderXMLWriter.WriteEndElement();                                              //</Buyer>
+    end;
+
+    procedure FmtDate(Value: Date) ResultString: Text[20];
+    var
+        FormatDateTxt: Label '<Year4>-<Month,2>-<Day,2>', Locked = true;
+    begin
+        ResultString := Format(Value, 0, FormatDateTxt)
+    end;
+}
