@@ -1,0 +1,623 @@
+codeunit 54005 EPE005_ProcessSalesOrder
+{
+    Access = Internal;
+
+    var
+        EPE005AmazonMWSSetup: Record EPE005_AmazonMWSSetup;
+        EPE005ProcessSettings: Record EPE005_ProcessSettings;
+        EPE005AmazonMarketplace: Record EPE005_AmazonMarketplace;
+        RequestTypeTxt: Label 'SalesOrder', locked = true;
+
+    procedure Import(var EVSDBCProcess: Record EVS_DBC_Process)
+    var
+        TempXMLBuffer: Record "XML Buffer" temporary;
+
+        EVSDBCMessageMgmt: Codeunit EVS_DBC_MessageMgmt;
+        EPE005HelperFunctions: Codeunit EPE005_HelperFunctions;
+        TempBlob: Codeunit "Temp Blob";
+
+        AmazonServerHttpClient: HttpClient;
+        AmazonServerHttpRequestMessage: HttpRequestMessage;
+        AmazonServerHttpResponseMessage: HttpResponseMessage;
+
+        Parameters: Text;
+        StringToSign: Text;
+        HTTPVerb: Text;
+        APIVersion: Text;
+        HTTPRequestURI: Text;
+        SecretKey: Text;
+        MWSAuthToken: Text;
+        SellerID: Text;
+        MWSAccessKeyID: Text;
+        ServiceURI: Text;
+        MarketplaceID: Text;
+        RequestTimeStamp: Text;
+        SignedString: Text;
+        SignedStringBase64: Text;
+        RequestString: Text;
+        ServerResponseText: Text;
+        NextToken: Text;
+        EncryptionAlgorithm: Integer;
+        OrderPageCount: Integer;
+        NextTokenFound: Boolean;
+        ProcessingDialog: Dialog;
+        ProcessingAmazonOrdersTok: Label 'Process: #1######################\Total Orders: #2##########\Status: #3################################\No.: #4################################', Comment = '%1 = Process Text, %2 = Number order, %3 = Current Status, %4 = Current Order Number';
+        ConnectingToMWSTxt: Label 'Connecting to Amazon MWS';
+        RequestingNewOrdersTxt: Label 'Requesting New Orders';
+        CompleteTxt: Label 'Complete';
+        ConnectionErr: Label 'An error occured whilst trying to connect to the Amazon MWS servers.';
+        NoDataReturnedFromAmazonErr: Label 'No valid data was returned from the Amazon MWS servers.';
+    begin
+        GetProcessSettings(EVSDBCProcess.EVS_DBC_ProcessCode);
+
+        if GuiAllowed then begin
+            ProcessingDialog.Open(ProcessingAmazonOrdersTok);
+            ProcessingDialog.Update(1, ConnectingToMWSTxt)
+        end;
+
+        // Set up the variables
+        HTTPVerb := 'POST';
+        APIVersion := '2013-09-01';
+        HTTPRequestURI := '/Orders/' + APIVersion;
+
+        // Set up the Amazon Specific Data Values
+        SecretKey := EPE005AmazonMWSSetup.EPE005_AmazonSecret;
+        MWSAuthToken := LOWERCASE(EPE005AmazonMWSSetup.EPE005_MWSAuthToken);
+        SellerID := EPE005AmazonMWSSetup.EPE005_AmazonMWSSellerId;
+        MWSAccessKeyID := EPE005AmazonMWSSetup.EPE005_MWSAccessKeyId;
+        EncryptionAlgorithm := 2;     // HMACSHA256
+
+        // Store the time and date the request was first run. Time is in UTC format
+        RequestTimeStamp := Format(CurrentDateTime, 19, 9) + 'Z';
+
+        // Get the local Market Place Endpoint
+        ServiceURI := EPE005AmazonMarketplace.EPE005_MWSEndpointDomain;
+        MarketplaceId := EPE005AmazonMarketplace.EPE005_MarketplaceId;
+
+        StringToSign := HTTPVerb + LF() + ServiceURI + LF() + HTTPRequestURI + LF();
+
+        // Construct the Canonicalised string (Byte Order sorting?) - They have to be in the order written here!
+        Parameters += 'AWSAccessKeyId=' + UrlEncode(MWSAccessKeyID);
+        Parameters += '&Action=' + UrlEncode('ListOrders');
+
+        // Have to uppercase the output as URLEncode returns lowercase encoded chars, but uppercase ones are expected
+        if EPE005ProcessSettings.EPE005_LastServerContactDate = 0D then
+            Parameters += '&CreatedAfter=' + UPPERCASE(UrlEncode(ReturnAmazonDate(Today() - 1) + 'T23:00:00Z'))
+        else
+            Parameters += '&CreatedAfter=' + UPPERCASE(UrlEncode(ReturnAmazonDate(EPE005ProcessSettings.EPE005_LastServerContactDate) + 'T' +
+                        format(EPE005ProcessSettings.EPE005_LastServerContactTime) + 'Z'));
+
+        Parameters += '&MWSAuthToken=' + UrlEncode(MWSAuthToken);
+
+        // Add all the available market places where trading occurs
+        // For the moment, default to the active market place
+        Parameters += '&MarketplaceId.Id.1=' + UrlEncode(MarketplaceId);
+
+        // Only get orders that have been paid for but not marked as shipped
+        Parameters += '&OrderStatus.Status.1=' + UrlEncode('Unshipped');
+        Parameters += '&SellerId=' + UrlEncode(SellerID);
+        Parameters += '&SignatureMethod=' + UrlEncode(Format(EPE005AmazonMWSSetup.EPE005_SignatureMethod));
+        Parameters += '&SignatureVersion=' + UrlEncode(Format(EPE005AmazonMWSSetup.EPE005_SignatureVersion));
+        Parameters += '&Timestamp=' + UpperCase(UrlEncode(RequestTimeStamp));
+        Parameters += '&Version=' + UrlEncode(APIVersion);
+        StringToSign := StringToSign + Parameters;
+
+        // Create the HMACSHA256 signature from the above request string including the header
+        // Needs to be URLEncoded and Base64
+        SignedString := UrlEncode(LOWERCASE(ReturnSignedString(StringToSign, SecretKey, EncryptionAlgorithm)));
+        SignedStringBase64 := UrlEncode(ReturnSignedStringAsBase64(StringToSign, SecretKey, EncryptionAlgorithm));
+
+        // Add the signature to the end of the string
+        RequestString := Parameters + '&Signature=' + SignedStringBase64;
+
+        Clear(AmazonServerHttpRequestMessage);
+        AmazonServerHttpRequestMessage.SetRequestUri('https://' + ServiceURI + HTTPRequestURI + '?' + RequestString);
+        AmazonServerHttpRequestMessage.Method := 'POST';
+
+        if GuiAllowed then
+            ProcessingDialog.Update(1, RequestingNewOrdersTxt);
+
+        Clear(AmazonServerHttpResponseMessage);
+        AmazonServerHttpClient.Clear();
+        AmazonServerHttpClient.Timeout := 10000;
+        AmazonServerHttpClient.Send(AmazonServerHttpRequestMessage, AmazonServerHttpResponseMessage);
+
+        if not AmazonServerHttpResponseMessage.IsSuccessStatusCode then
+            Error(ConnectionErr);
+
+        AmazonServerHttpResponseMessage.Content.ReadAs(ServerResponseText);
+
+        If GuiAllowed then
+            ProcessingDialog.Update(1, CompleteTxt);
+
+        // ServerResponseText holds the response that has come back from the Amazon servers
+        TempXMLBuffer.DeleteAll();
+        TempXMLBuffer.LoadFromText(ServerResponseText);
+        if TempXMLBuffer.IsEmpty then
+            Error(NoDataReturnedFromAmazonErr);
+
+        NextToken := '';
+        NextTokenFound := false;
+
+        // Are there any more pages to return?
+        TempXMLBuffer.Reset();
+        TempXMLBuffer.SetRange(Type, TempXMLBuffer.Type::Element);
+        TempXMLBuffer.SetRange(Name, 'NextToken');
+        if TempXMLBuffer.FindFirst() then begin
+            NextTokenFound := true;
+            NextToken := TempXMLBuffer.GetValue();
+        end;
+
+        if NextTokenFound then begin
+            OrderPageCount := 2;                    // We already have page 1 downloaded
+
+            while NextTokenFound do begin
+                // Reset all the variables to start again
+                Parameters := '';
+                StringToSign := HTTPVerb + LF() +
+                ServiceURI + LF() +
+                HTTPRequestURI + LF();
+
+                // Store the time and date the request was first run. Time is in UTC format
+                RequestTimeStamp := FORMAT(CURRENTDATETIME(), 19, 9) + 'Z';
+
+                // Construct the Canonicalised string (Byte Order sorting?) - They have to be in the order written here!
+                Parameters += 'AWSAccessKeyId=' + UrlEncode(MWSAccessKeyID);
+                Parameters += '&Action=' + UrlEncode('ListOrdersByNextToken');
+                Parameters += '&MWSAuthToken=' + UrlEncode(MWSAuthToken);
+                Parameters += '&NextToken=' + UrlEncodeUpper(NextToken);
+                Parameters += '&SellerId=' + UrlEncode(SellerID);
+                Parameters += '&SignatureMethod=' + UrlEncode(Format(EPE005AmazonMWSSetup.EPE005_SignatureMethod));
+                Parameters += '&SignatureVersion=' + UrlEncode(Format(EPE005AmazonMWSSetup.EPE005_SignatureVersion));
+                Parameters += '&Timestamp=' + UPPERCASE(UrlEncode(RequestTimeStamp));
+                Parameters += '&Version=' + UrlEncode(APIVersion);
+
+                StringToSign += Parameters;
+
+                // Create the HMACSHA256 signature from the above request string including the header
+                // Needs to be URLEncoded and Base64
+                SignedString := UrlEncode(LOWERCASE(ReturnSignedString(StringToSign, SecretKey, EncryptionAlgorithm)));
+                SignedStringBase64 := UrlEncode(ReturnSignedStringAsBase64(StringToSign, SecretKey, EncryptionAlgorithm));
+
+                // Add the signature to the end of the string
+                RequestString := Parameters + '&Signature=' + SignedStringBase64;
+
+                if GuiAllowed then
+                    ProcessingDialog.Update(1, RequestingNewOrdersTxt);
+
+                Clear(AmazonServerHttpResponseMessage);
+                AmazonServerHttpClient.Clear();
+                AmazonServerHttpClient.Timeout := 10000;
+                AmazonServerHttpClient.Send(AmazonServerHttpRequestMessage, AmazonServerHttpResponseMessage);
+
+                if not AmazonServerHttpResponseMessage.IsSuccessStatusCode then
+                    Error(ConnectionErr);
+
+                AmazonServerHttpResponseMessage.Content.ReadAs(ServerResponseText);
+
+                // ServerResponseText holds the response that has come back from the Amazon servers
+                TempXMLBuffer.DeleteAll();
+                TempXMLBuffer.LoadFromText(ServerResponseText);
+                if TempXMLBuffer.IsEmpty then
+                    Error(NoDataReturnedFromAmazonErr);
+
+                OrderPageCount := OrderPageCount + 1;
+                NextToken := '';
+                NextTokenFound := FALSE;
+
+                // Are there any more pages to return?
+                TempXMLBuffer.Reset();
+                TempXMLBuffer.SetRange(Type, TempXMLBuffer.Type::Element);
+                TempXMLBuffer.SetRange(Name, 'NextToken');
+                if TempXMLBuffer.FindFirst() then begin
+                    NextTokenFound := true;
+                    NextToken := TempXMLBuffer.GetValue();
+                end;
+            end;
+        end;
+
+        // Here we now save the information into temp blob so that it can be saved for later should we need it.
+        EPE005HelperFunctions.SaveTextToTempBlob(ServerResponseText, TempBlob);
+        EVSDBCMessageMgmt.CreateBatch(EVSDBCProcess, TempBlob, EPE005HelperFunctions.GenerateFilename(RequestTypeTxt, ''));
+
+        if GuiAllowed then
+            ProcessingDialog.Close();
+    end;
+
+    procedure CreateOrderMessages(var EVSDBCProcess: Record EVS_DBC_Process; var EVSDBCMessageBatch: Record EVS_DBC_MessageBatch)
+    var
+        EVSDBCMessageHeader: Record EVS_DBC_MessageHeader;
+        TempEVSDBCMessageHeader: Record EVS_DBC_MessageHeader temporary;
+        TempXMLBuffer: Record "XML Buffer" temporary;
+        TempSalesHeader: Record "Sales Header" temporary;
+        ServerResponseText: Text;
+        OrderInStream: InStream;
+    begin
+        if not EPE005AmazonMWSSetup.Get() then
+            exit;
+        GetProcessSettings(EVSDBCProcess.EVS_DBC_ProcessCode);
+
+        EVSDBCMessageBatch.CalcFields(EVS_DBC_ImportExportFile);
+        if not EVSDBCMessageBatch.EVS_DBC_ImportExportFile.HasValue() then
+            exit;
+
+        EVSDBCMessageBatch.EVS_DBC_ImportExportFile.CreateInStream(OrderInStream, TextEncoding::UTF8);
+        OrderInStream.ReadText(ServerResponseText);
+
+        TempXMLBuffer.DeleteAll();
+        TempXMLBuffer.LoadFromText(ServerResponseText);
+        if TempXMLBuffer.IsEmpty then
+            exit;
+
+        // Process headers
+        TempXMLBuffer.Reset();
+        if TempXMLBuffer.FindSet() then
+            repeat
+                if (TempXMLBuffer.Type = TempXMLBuffer.Type::Element) AND (TempXMLBuffer.Name = 'Order') then begin
+                    EVSDBCMessageHeader.Init();
+                    EVSDBCMessageHeader.Validate(EVS_DBC_MessageBatchID, EVSDBCMessageBatch.EVS_DBC_MessageBatchID);
+                    EVSDBCMessageHeader.Validate(EVS_DBC_EntityTableNo, Database::"Sales Header");
+                    EVSDBCMessageHeader.Validate(EVS_DBC_EntityTableType, TempSalesHeader."Document Type"::Order.AsInteger());
+                    EVSDBCMessageHeader.Validate(EVS_DBC_TakenAtCode, EPE005ProcessSettings.EPE005_TakenAtCode);
+                    EVSDBCMessageHeader.Validate(EVS_DBC_UseAddress, true);
+                    EVSDBCMessageHeader.Insert(true);
+                end;
+
+                case TempXMLBuffer.Name of
+                    'AmazonOrderId':
+                        begin
+                            EVSDBCMessageHeader.Validate(EVS_DBC_ExternalDocumentNo, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_ExternalDocumentNo)));
+                            EVSDBCMessageHeader.Validate(EVS_DBC_HeaderRef1, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_HeaderRef1)));
+                        end;
+                    'OrderType':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_Code1, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_Code1)));
+                    'OrderStatus':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_Code2, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_Code2)));
+                    'PurchaseDate':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_RemoteOrderDate, Format(ConvertAmazonDateToNAVDate(TempXMLBuffer.Value)));
+                    'Name':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_AddressName, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_AddressName)));
+                    'AddressLine1':
+                        begin
+                            EVSDBCMessageHeader.Validate(EVS_DBC_Address, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_Address)));
+                            EVSDBCMessageHeader.EVS_DBC_Address := ConvertStr(EVSDBCMessageHeader.EVS_DBC_Address, ',', ';');
+                        end;
+                    'AddressLine2':
+                        begin
+                            EVSDBCMessageHeader.Validate(EVS_DBC_Address2, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_Address2)));
+                            EVSDBCMessageHeader.EVS_DBC_Address2 := ConvertStr(EVSDBCMessageHeader.EVS_DBC_Address2, ',', ';');
+                        end;
+                    'City':
+                        begin
+                            EVSDBCMessageHeader.Validate(EVS_DBC_AddressCity, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_AddressCity)));
+                            EVSDBCMessageHeader.EVS_DBC_AddressCity := ConvertStr(EVSDBCMessageHeader.EVS_DBC_AddressCity, ',', ';');
+                        end;
+                    'StateOrRegion':
+                        begin
+                            EVSDBCMessageHeader.Validate(EVS_DBC_AddressCounty, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_AddressCounty)));
+                            EVSDBCMessageHeader.EVS_DBC_AddressCounty := CONVERTSTR(EVSDBCMessageHeader.EVS_DBC_AddressCounty, ',', ';');
+                        end;
+                    'PostalCode':
+                        begin
+                            EVSDBCMessageHeader.Validate(EVS_DBC_AddressPostcode, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_AddressPostcode)));
+                            EVSDBCMessageHeader.EVS_DBC_AddressPostcode := CONVERTSTR(EVSDBCMessageHeader.EVS_DBC_AddressPostcode, ',', ';');
+                        end;
+                    'CountryCode':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_AddCountryRegionCode, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_AddCountryRegionCode)));
+                    'Phone':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_ContactTelephone, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_ContactTelephone)));
+                    'BuyerEmail':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_ContactEmail, CopyStr(TempXMLBuffer.Value, 1, MAXSTRLEN(EVSDBCMessageHeader.EVS_DBC_ContactEmail)));
+                    'Amount':
+                        Evaluate(EVSDBCMessageHeader.EVS_DBC_Decimal1, TempXMLBuffer.Value);
+                    'CurrencyCode':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_CurrencyCode, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_CurrencyCode)));
+                    'LatestShipDate':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_RemoteShipmentDate, Format(ConvertAmazonDateToNAVDate(TempXMLBuffer.Value)));
+                    //'EarliestShipDate':
+                    //    EPE005AmazonOrderHeader.EPE005_EarliestShipDate := ConvertAmazonDateToNAVDateTime(TempXMLBuffer.Value);
+                    //'LatestDeliveryDate':
+                    //    EPE005AmazonOrderHeader.EPE005_LatestDeliveryDate := ConvertAmazonDateToNAVDateTime(TempXMLBuffer.Value);
+                    //'EarliestDeliveryDate':
+                    //    EPE005AmazonOrderHeader.EPE005_EarliestDeliveryDate := ConvertAmazonDateToNAVDateTime(TempXMLBuffer.Value);
+
+                    'IsPrime':
+                        begin
+                            Evaluate(EVSDBCMessageHeader.EVS_DBC_Boolean1, TempXMLBuffer.Value);
+                            if (EVSDBCMessageHeader.EVS_DBC_Boolean1) and (EPE005ProcessSettings.EPE005_PrimeCustomerNo <> '') then begin
+                                EVSDBCMessageHeader.Validate(EVS_DBC_AccountCode, EPE005ProcessSettings.EPE005_PrimeCustomerNo);
+                                if EPE005ProcessSettings.EPE005_PrimeShipToCode <> '' then
+                                    EVSDBCMessageHeader.Validate(EVS_DBC_AddressCode, EPE005ProcessSettings.EPE005_PrimeShipToCode);
+                            end else begin
+                                EVSDBCMessageHeader.Validate(EVS_DBC_AccountCode, EPE005ProcessSettings.EPE005_CustomerNo);
+                                if EPE005ProcessSettings.EPE005_ShipToCode <> '' then
+                                    EVSDBCMessageHeader.Validate(EVS_DBC_AddressCode, EPE005ProcessSettings.EPE005_ShipToCode);
+                            end;
+                        end;
+                    'PaymentMethod':
+                        EVSDBCMessageHeader.Validate(EVS_DBC_PaymentCode, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageHeader.EVS_DBC_PaymentCode)));
+
+                    // No more elements to process so insert a record or modify an existing one
+                    'ShipmentServiceLevelCategory':
+                        begin
+                            EVSDBCMessageHeader.Modify(true);
+
+                            // Make a copy so we can read through the entries we have just created
+                            TempEVSDBCMessageHeader := EVSDBCMessageHeader;
+                            TempEVSDBCMessageHeader.Insert();
+                        end;
+                end;
+            until TempXMLBuffer.Next() = 0;
+
+        CreateOrderLines(EVSDBCProcess, EVSDBCMessageBatch, EVSDBCMessageHeader, TempEVSDBCMessageHeader);
+    end;
+
+    local procedure CreateOrderLines(var EVSDBCProcess: Record EVS_DBC_Process; var EVSDBCMessageBatch: Record EVS_DBC_MessageBatch; var EVSDBCMessageHeader: Record EVS_DBC_MessageHeader; var TempEVSDBCMessageHeader: Record EVS_DBC_MessageHeader)
+    begin
+        // Read through the temporary records that contain the orders headers that we have just created
+        // and trigger a read from the orders to get the lines
+        if TempEVSDBCMessageHeader.FindSet() then
+            repeat
+                EVSDBCMessageHeader.Get(TempEVSDBCMessageHeader.EVS_DBC_MessageHeaderID);
+                GetAmazonOrderLines(EVSDBCMessageHeader.EVS_DBC_ExternalDocumentNo, EVSDBCProcess, EVSDBCMessageHeader);
+                Sleep(2000);
+            until TempEVSDBCMessageHeader.Next() = 0;
+    end;
+
+    local procedure GetAmazonOrderLines(AmazonOrderId: Text[50]; var EVSDBCProcess: Record EVS_DBC_Process; var EVSDBCMessageHeader: Record EVS_DBC_MessageHeader)
+    var
+        EVSDBCMessageLine: Record EVS_DBC_MessageLine;
+        TempXMLBuffer: Record "XML Buffer" temporary;
+
+        AmazonServerHttpClient: HttpClient;
+        AmazonServerHttpRequestMessage: HttpRequestMessage;
+        AmazonServerHttpResponseMessage: HttpResponseMessage;
+
+        HTTPVerb: Text;
+        APIVersion: Text;
+        HTTPRequestURI: Text;
+        SecretKey: Text;
+        MWSAuthToken: Text;
+        SellerID: Text;
+        MWSAccessKeyID: Text;
+        Parameters: Text;
+        RequestTimeStamp: Text;
+        StringToSign: Text;
+        ServiceURI: Text;
+        RequestString: Text;
+        SignedString: Text;
+        SignedStringBase64: Text;
+        ServerResponseText: Text;
+        EncryptionAlgorithm: Integer;
+
+        RemoteQuantity: Decimal;
+        RemoteItemPrice: Decimal;
+        TaxAmount: Decimal;
+
+        PriceFound: Boolean;
+        TaxAmountFound: Boolean;
+
+        ConnectionErr: Label 'An error occured whilst trying to connect to the Amazon MWS servers.';
+    begin
+        GetProcessSettings(EVSDBCProcess.EVS_DBC_ProcessCode);
+
+        // Set up the variables
+        HTTPVerb := 'POST';
+        APIVersion := '2013-09-01';
+        HTTPRequestURI := '/Orders/' + APIVersion;
+
+        // Set up the Amazon Specific Data Values
+        SecretKey := EPE005AmazonMWSSetup.EPE005_AmazonSecret;
+        MWSAuthToken := LOWERCASE(EPE005AmazonMWSSetup.EPE005_MWSAuthToken);
+        SellerID := EPE005AmazonMWSSetup.EPE005_AmazonMWSSellerId;
+        MWSAccessKeyID := EPE005AmazonMWSSetup.EPE005_MWSAccessKeyId;
+        EncryptionAlgorithm := 2;     // HMACSHA256
+
+        // Store the time and date the request was first run. Time is in UTC format
+        RequestTimeStamp := format(CurrentDateTime(), 19, 9) + 'Z';
+
+        StringToSign := HTTPVerb + LF() +
+          ServiceURI + LF() +
+          HTTPRequestURI + LF();
+
+        // Construct the Canonicalised string (Byte Order sorting?) - They have to be in the order written here!
+        Parameters += 'AWSAccessKeyId=' + UrlEncode(MWSAccessKeyID);
+        Parameters += '&Action=' + UrlEncode('ListOrderItems');
+        Parameters += '&AmazonOrderId.Id.1=' + AmazonOrderId;
+        Parameters += '&MWSAuthToken=' + UrlEncode(MWSAuthToken);
+        Parameters += '&SellerId=' + UrlEncode(SellerID);
+        Parameters += '&SignatureMethod=' + UrlEncode(Format(EPE005AmazonMWSSetup.EPE005_SignatureMethod));
+        Parameters += '&SignatureVersion=' + UrlEncode(Format(EPE005AmazonMWSSetup.EPE005_SignatureVersion));
+        Parameters += '&Timestamp=' + UpperCase(UrlEncode(RequestTimeStamp));
+        Parameters += '&Version=' + UrlEncode(APIVersion);
+
+        StringToSign := StringToSign + Parameters;
+
+        // Create the HMACSHA256 signature from the above request string including the header
+        // Needs to be URLEncoded and Base64
+        SignedString := UrlEncode(LOWERCASE(ReturnSignedString(StringToSign, SecretKey, EncryptionAlgorithm)));
+        SignedStringBase64 := UrlEncode(ReturnSignedStringAsBase64(StringToSign, SecretKey, EncryptionAlgorithm));
+
+        // Add the signature to the end of the string
+        RequestString := Parameters + '&Signature=' + SignedStringBase64;
+
+        Clear(AmazonServerHttpRequestMessage);
+        AmazonServerHttpRequestMessage.SetRequestUri('https://' + ServiceURI + HTTPRequestURI + '?' + RequestString);
+        AmazonServerHttpRequestMessage.Method := 'POST';
+
+        Clear(AmazonServerHttpResponseMessage);
+        AmazonServerHttpClient.Clear();
+        AmazonServerHttpClient.Timeout := 10000;
+        AmazonServerHttpClient.Send(AmazonServerHttpRequestMessage, AmazonServerHttpResponseMessage);
+
+        if not AmazonServerHttpResponseMessage.IsSuccessStatusCode then
+            Error(ConnectionErr);
+
+        AmazonServerHttpResponseMessage.Content.ReadAs(ServerResponseText);
+
+        TempXMLBuffer.DeleteAll();
+        TempXMLBuffer.LoadFromText(ServerResponseText);
+
+        if TempXMLBuffer.FindSet() then
+            repeat
+                if (TempXMLBuffer.Type = TempXMLBuffer.Type::Element) AND (TempXMLBuffer.Name = 'OrderItem') then begin
+                    EVSDBCMessageLine.Init();
+                    EVSDBCMessageLine.Validate(EVS_DBC_MessageHeaderID, EVSDBCMessageHeader.EVS_DBC_MessageHeaderID);
+                end;
+
+                case TempXMLBuffer.Name of
+                    'ASIN':
+                        if (TempXMLBuffer.Value <> '') and (EVSDBCMessageLine.EVS_DBC_RemoteItemIDentifier = '') then
+                            EVSDBCMessageLine.Validate(EVS_DBC_RemoteItemIDentifier, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageLine.EVS_DBC_RemoteItemIDentifier)));
+                    'OrderItemId':
+                        if (TempXMLBuffer.Value <> '') and (EVSDBCMessageLine.EVS_DBC_RemoteItemIDentifier = '') then
+                            EVSDBCMessageLine.Validate(EVS_DBC_RemoteItemIDentifier, CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(EVSDBCMessageLine.EVS_DBC_RemoteItemIDentifier)));
+                    'QuantityOrdered':
+                        Evaluate(EVSDBCMessageLine.EVS_DBC_RemoteQuantity, TempXMLBuffer.Value);
+                    'NumberOfItems':
+                        Evaluate(EVSDBCMessageLine.EVS_DBC_Decimal1, TempXMLBuffer.Value);
+                    'ItemPrice':
+                        PriceFound := true;           // Found the item price element, so the next amount element is the price
+                    'ItemTax':
+                        TaxAmountFound := true;       // Found the tax element, so the next amount is the tax value
+
+                    // NH 5/07/2022 - Don't understand why this is here, surely it will cause an error?
+                    'CurrencyCode':
+                        if PriceFound then
+                            Evaluate(EVSDBCMessageLine.EVS_DBC_RemoteItemPrice, TempXMLBuffer.Value);
+
+                    // Item Price Amount & Item Tax Amount have the same name in the XML feed!
+                    'Amount':
+                        begin
+                            // Prices from Amazon come in as the full amount (Unit Price * Quantity)
+                            if PriceFound then begin    // Item price comes in inc VAT
+                                Evaluate(EVSDBCMessageLine.EVS_DBC_RemoteItemPrice, TempXMLBuffer.Value);
+                                PriceFound := false;
+                            end;
+
+                            if TaxAmountFound then begin                   // Remove the VAT
+                                Evaluate(TaxAmount, TempXMLBuffer.Value);
+                                Evaluate(RemoteQuantity, EVSDBCMessageLine.EVS_DBC_RemoteQuantity);
+                                Evaluate(RemoteItemPrice, EVSDBCMessageLine.EVS_DBC_RemoteItemPrice);
+                                if RemoteQuantity = 0 then
+                                    RemoteItemPrice := (RemoteItemPrice - TaxAmount) / 1
+                                else
+                                    RemoteItemPrice := (RemoteItemPrice - TaxAmount) / RemoteQuantity;
+                                TaxAmountFound := false;
+                            end;
+                        end;
+                //'CustomizedURL':
+                //    TempEPE005AmazonOrderLine.EPE005_CustomisedURL := CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(TempEPE005AmazonOrderLine.EPE005_CustomisedURL));
+                //'SellerSKU':
+                //    TempEPE005AmazonOrderLine.EPE005_SellerSKU := CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(TempEPE005AmazonOrderLine.EPE005_SellerSKU));
+                //'Title':
+                //    TempEPE005AmazonOrderLine.EPE005_Title := CopyStr(TempXMLBuffer.Value, 1, MaxStrLen(TempEPE005AmazonOrderLine.EPE005_Title));
+                //'PromotionDiscountTax':
+                //    begin
+                // Write the order line ready for the next one
+                // Set the remaining values before writing to the table
+                //        TempEPE005AmazonOrderLine.EPE005_LineNo := OrderLineNo;
+                //        TempEPE005AmazonOrderLine.EPE005_AmazonOrderID := EPE005AmazonOrderHeader.EPE005_AmazonOrderID;
+
+                //>>EPE003 - Check if already imported
+                //        EPE005AmazonOrderLine.Reset();
+                //        EPE005AmazonOrderLine.SetRange(EPE005_AmazonOrderId, EPE005AmazonOrderHeader.EPE005_AmazonOrderID);
+                //        EPE005AmazonOrderLine.SetRange(EPE005_OrderItemId, TempEPE005AmazonOrderLine.EPE005_OrderItemId);
+                //        EPE005AmazonOrderLine.SetRange(EPE005_QuantityOrdered, TempEPE005AmazonOrderLine.EPE005_QuantityOrdered);
+                //        if not EPE005AmazonOrderLine.FindFirst() then begin
+                //            EPE005AmazonOrderLine.Init();
+                //            EPE005AmazonOrderLine := TempEPE005AmazonOrderLine;
+                //            IF NOT EPE005AmazonOrderLine.Insert() THEN
+                //                EPE005AmazonOrderLine.Modify();
+                //       end;
+                //<<EPE003 - Check if already imported
+                //   end;
+                end;
+            until TempXMLBuffer.Next() = 0;
+    end;
+
+    local procedure GetProcessSettings(ProcessCode: Code[20])
+    var
+        AmazonMWSSetupNotFoundErr: Label 'Amazon MWS Setup not found. Please configure the connection before trying again.';
+    begin
+        if not EPE005AmazonMWSSetup.Get() then
+            Error(AmazonMWSSetupNotFoundErr);
+        EPE005ProcessSettings.Get(ProcessCode);
+        EPE005AmazonMarketplace.Get(EPE005ProcessSettings.EPE005_MarketplaceCode);
+    end;
+
+    local procedure LF(): Text;
+    var
+        Delimiter: Text[1];
+    begin
+        Delimiter := '';
+        Delimiter[1] := 10;
+        exit(Delimiter);
+    end;
+
+    procedure UrlEncode(StringToEncode: Text): Text
+    var
+        TypeHelper: Codeunit "Type Helper";
+    begin
+        exit(TypeHelper.UrlEncode(StringToEncode));
+    end;
+
+    local procedure UrlEncodeUpper(StringToEncode: Text): Text;
+    var
+        CharCounter: Integer;
+        Char1: Text;
+        Char2: Text;
+    begin
+        // Convert the URL Encoded chars to uppercase
+        StringToEncode := UrlEncode(StringToEncode);
+
+        for CharCounter := 1 to StrLen(StringToEncode) - 2 do
+            if StringToEncode[CharCounter] = '%' then begin
+                Char1[1] := StringToEncode[CharCounter + 1];
+                Char2[1] := StringToEncode[CharCounter + 2];
+
+                Char1 := UPPERCASE(Char1);
+                Char2 := UPPERCASE(Char2);
+                StringToEncode[CharCounter + 1] := Char1[1];
+                StringToEncode[CharCounter + 2] := Char2[1];
+            end;
+        CharCounter += 2;
+
+        exit(StringToEncode);
+    end;
+
+    local procedure ReturnAmazonDate(InputDate: Date) AmazonDateFormat: Text;
+    begin
+        // Return ISO format Date
+        AmazonDateFormat := Format(InputDate, 0, '<Year4>-<Month,2>-<Day,2>');
+    end;
+
+    local procedure ReturnSignedString(StringToSign: Text; SecretKey: Text; HashAlgorithm: Integer) SignedString: Text;
+    var
+        CryptographyManagement: Codeunit "Cryptography Management";
+    begin
+        // Input string, Secret Key, HMACSHA256
+        SignedString := CryptographyManagement.GenerateHash(StringToSign, SecretKey, HashAlgorithm);
+    end;
+
+    local procedure ReturnSignedStringAsBase64(StringToSign: Text; SecretKey: Text; HashAlgorithm: Integer) SignedString: Text;
+    var
+        CryptographyManagement: Codeunit "Cryptography Management";
+    begin
+        SignedString := CryptographyManagement.GenerateHashAsBase64String(StringToSign, SecretKey, HashAlgorithm);
+    end;
+
+    local procedure ConvertAmazonDateToNAVDate(TextDateToConvert: Text) ReturnDateTime: Date;
+    var
+        YYYY: Integer;
+        MN: Integer;
+        DD: Integer;
+        NAVDate: Date;
+    begin
+        Evaluate(YYYY, CopyStr(TextDateToConvert, 1, 4));
+        Evaluate(MN, CopyStr(TextDateToConvert, 6, 2));
+        Evaluate(DD, CopyStr(TextDateToConvert, 9, 2));
+        NAVDate := DMY2Date(DD, MN, YYYY);
+        ReturnDateTime := NAVDate;
+    end;
+}
