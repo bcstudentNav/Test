@@ -1,0 +1,18 @@
+codeunit 71129632 EVO_EFL_BinHelper
+{
+    procedure IsSystemBin(LocationCode: Code[10]; BinCode: Code[20]): Boolean
+    var
+        Location: Record Location;
+        BinIsSystemBin: Boolean;
+    begin
+        if not Location.Get(LocationCode) then
+            exit(false);
+
+        BinIsSystemBin := (BinCode in
+            [Location."Receipt Bin Code", Location."Shipment Bin Code",
+            Location."Open Shop Floor Bin Code", Location."To-Production Bin Code", Location."From-Production Bin Code",
+            Location."Adjustment Bin Code", Location."Cross-Dock Bin Code",
+            Location."To-Assembly Bin Code", Location."From-Assembly Bin Code", Location."Asm.-to-Order Shpt. Bin Code"]);
+        exit(BinIsSystemBin);
+    end;
+}
