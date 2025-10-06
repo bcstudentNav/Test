@@ -1,0 +1,117 @@
+codeunit 71129618 EVO_EFL_DateHelper
+{
+    procedure ErrorIfBlankDate(EnteredDate: Date; EnteredDateCaption: Text)
+    var
+        MustNotBeBlankErr: Label '%1 must not be blank.', Comment = '%1 - Entered Date Caption';
+    begin
+        if IsBlankDate(EnteredDate) then
+            Error(MustNotBeBlankErr, EnteredDateCaption);
+    end;
+
+    procedure ErrorIfDateNotSame(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustBeTheSameErr: Label '%1 (%2) must be the same as %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if not CheckDateSame(EnteredDate, CheckDate) then
+            Error(MustBeTheSameErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate);
+    end;
+
+    procedure ErrorIfDateBefore(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustNotBeBeforeErr: Label '%1 (%2) must not be before %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if CheckDateBefore(EnteredDate, CheckDate) then
+            Error(MustNotBeBeforeErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate);
+    end;
+
+    procedure ErrorIfDateAfter(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustNotBeAfterErr: Label '%1 (%2) must not be after %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if CheckDateAfter(EnteredDate, CheckDate) then
+            Error(MustNotBeAfterErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate)
+    end;
+
+    procedure ErrorIfDateNotBefore(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustBeBeforeErr: Label '%1 (%2) must be before %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if not CheckDateBefore(EnteredDate, CheckDate) then
+            Error(MustBeBeforeErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate);
+    end;
+
+    procedure ErrorIfDateNotOnOrBefore(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustBeOnOrBeforeErr: Label '%1 (%2) must be on or before %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if not CheckDateOnOrBefore(EnteredDate, CheckDate) then
+            Error(MustBeOnOrBeforeErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate);
+    end;
+
+    procedure ErrorIfDateNotAfter(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustBeAfterErr: Label '%1 (%2) must be after %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if not CheckDateAfter(EnteredDate, CheckDate) then
+            Error(MustBeAfterErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate);
+    end;
+
+    procedure ErrorIfDateNotOnOrAfter(EnteredDate: Date; EnteredDateCaption: Text; CheckDate: Date; CheckDateCaption: Text)
+    var
+        MustBeOnOrAfterErr: Label '%1 (%2) must be on or after %3 (%4).', Comment = '%1 - Entered Date Caption, %2 - Entered Date, %3 - Check Date Caption, %4 - Check Date';
+    begin
+        if not CheckDateOnOrAfter(EnteredDate, CheckDate) then
+            Error(MustBeOnOrAfterErr, EnteredDateCaption, EnteredDate, CheckDateCaption, CheckDate);
+    end;
+
+    procedure IsBlankDate(NewDate: Date): Boolean
+    begin
+        exit(NewDate = 0D);
+    end;
+
+    procedure CheckDateSame(EnteredDate: Date; CheckDate: Date): Boolean
+    begin
+        exit(EnteredDate = CheckDate);
+    end;
+
+    procedure CheckDateBefore(EnteredDate: Date; CheckDate: Date): Boolean
+    begin
+        exit(EnteredDate < CheckDate);
+    end;
+
+    procedure CheckDateOnOrBefore(EnteredDate: Date; CheckDate: Date): Boolean
+    begin
+        exit(EnteredDate <= CheckDate);
+    end;
+
+    procedure CheckDateAfter(EnteredDate: Date; CheckDate: Date): Boolean
+    begin
+        exit(EnteredDate > CheckDate);
+    end;
+
+    procedure CheckDateOnOrAfter(EnteredDate: Date; CheckDate: Date): Boolean
+    begin
+        exit(EnteredDate >= CheckDate);
+    end;
+
+    procedure GetLastDateOfMonth(SourceDate: Date): Date
+    begin
+        exit(CalcDate('<CM>', SourceDate));
+    end;
+
+    procedure GetLastDMYOfMonth(SourceDate: Date; DMY: Integer): Integer
+    var
+        EndOfMonth: Date;
+    begin
+        EndOfMonth := GetLastDateOfMonth(SourceDate);
+        exit(Date2DMY(EndOfMonth, DMY));
+    end;
+
+    procedure GetLastDWYOfMonth(SourceDate: Date; DWY: Integer): Integer
+    var
+        EndOfMonth: Date;
+    begin
+        EndOfMonth := GetLastDateOfMonth(SourceDate);
+        exit(Date2DWY(EndOfMonth, DWY));
+    end;
+}
