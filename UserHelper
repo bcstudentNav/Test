@@ -1,0 +1,142 @@
+codeunit 71129584 EVO_EFL_UserHelper
+{
+    Permissions = tabledata EVO_EFL_UserActivity = r;
+
+    procedure GetUserNameBySID(SID: Guid): Text[50]
+    var
+        User: Record User;
+    begin
+        if not User.Get(SID) then
+            Clear(User);
+        exit(User."User Name")
+    end;
+
+    procedure GetFullNameBySID(SID: Guid): Text[80]
+    var
+        User: Record User;
+    begin
+        if not User.Get(SID) then
+            Clear(User);
+        exit(User."Full Name")
+    end;
+
+    procedure GetFullNameByUserName(UserName: Text[50]): Text[80]
+    var
+        User: Record User;
+    begin
+        User.SetCurrentKey("User Name");
+        User.SetRange("User Name", UserName);
+        if not User.FindFirst() then
+            Clear(User);
+        exit(User."Full Name");
+    end;
+
+    procedure GetUserLocationFilter(): Text
+    var
+        WarehouseEmployee: Record "Warehouse Employee";
+        Location: Record Location;
+        SelectionFilterManagement: Codeunit SelectionFilterManagement;
+        BlankLocation: Boolean;
+        IsHandled: Boolean;
+        LocationFilter: Text;
+        BlankFilterTok: Label '''''', Locked = true;
+    begin
+        OnBeforeGetUserLocationFilter(LocationFilter, IsHandled);
+        if IsHandled then
+            exit(LocationFilter);
+
+        WarehouseEmployee.SetRange("User ID", UserId());
+        if WarehouseEmployee.FindSet() then
+            repeat
+                if WarehouseEmployee."Location Code" = '' then
+                    BlankLocation := true
+                else
+                    if Location.Get(WarehouseEmployee."Location Code") then
+                        Location.Mark(true);
+            until WarehouseEmployee.Next() = 0;
+        Location.MarkedOnly(true);
+        LocationFilter := SelectionFilterManagement.GetSelectionFilterForLocation(Location);
+        if BlankLocation and (LocationFilter <> '') then
+            LocationFilter := LocationFilter + '|' + BlankFilterTok;
+        exit(LocationFilter);
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeGetUserLocationFilter(var LocationFilter: Text; var IsHandled: Boolean)
+    begin
+    end;
+
+    procedure TestAllowedUserActivity(UserActivity: Enum EVO_EFL_UserActivity)
+    var
+        NotAuthorisedErr: Label 'You are not authorised to perform this action. If you need your permissions changing, please contact your system administrator and provide the following reference...\\(%1)', Comment = '%1 - User Activity';
+    begin
+        // Check License
+        if not EVOEFLLicensing.ApplicationIsLicensed() then
+            exit;
+
+        if not TestAllowedUserActivitySilent(UserActivity) then
+            Error(NotAuthorisedErr, UserActivity);
+    end;
+
+    procedure TestAllowedUserActivitySilent(UserActivity: Enum EVO_EFL_UserActivity): Boolean
+    var
+        EVOEFLEvosoftSetup: Record EVO_EFL_EvosoftSetup;
+        EVOEFLAllowedUserActivity: Record EVO_EFL_AllowedUserActivity;
+    begin
+        // Check License
+        if not EVOEFLLicensing.ApplicationIsLicensed() then
+            exit(false);
+
+        EVOEFLEvosoftSetup.Get();
+
+        if EVOEFLEvosoftSetup.EVO_EFL_UseUserActivitiesFrom <> '' then
+            EVOEFLAllowedUserActivity.ChangeCompany(EVOEFLEvosoftSetup.EVO_EFL_UseUserActivitiesFrom);
+
+        EVOEFLAllowedUserActivity.SetRange(EVO_EFL_UserSecurityID, UserSecurityId());
+        EVOEFLAllowedUserActivity.SetRange(EVO_EFL_ActivityOrdinal, UserActivity.AsInteger());
+        exit(not EVOEFLAllowedUserActivity.IsEmpty());
+    end;
+
+
+    /// <summary>
+    /// Generates entries in the user activity table so that they can be selected from a drop down list
+    /// </summary>
+    procedure GenerateUserActivities()
+    var
+        EVOEFLUserActivity: Record EVO_EFL_UserActivity;
+        AllowedUserActivityRecordRef: RecordRef;
+        ActivityEnumFieldRef: FieldRef;
+
+        Loop: Integer;
+        OptionCaptions: List of [Text];
+        OptionOrdinals: List of [Integer];
+    begin
+        EVOEFLUserActivity.DeleteAll();
+        AllowedUserActivityRecordRef.GetTable(EVOEFLUserActivity);
+        ActivityEnumFieldRef := AllowedUserActivityRecordRef.Field(EVOEFLUserActivity.FieldNo(EVO_EFL_UserActivity));
+        OptionCaptions := ActivityEnumFieldRef.OptionCaption().Split(',');
+        OptionOrdinals := Enum::EVO_EFL_UserActivity.Ordinals();
+        for Loop := 1 to OptionCaptions.Count() do begin
+            EVOEFLUserActivity.Init();
+            EVOEFLUserActivity.EVO_EFL_Name := CopyStr(OptionCaptions.Get(Loop), 1, MaxStrLen(EVOEFLUserActivity.EVO_EFL_Name));
+            EVOEFLUserActivity.EVO_EFL_UserActivity := Enum::EVO_EFL_UserActivity.FromInteger(OptionOrdinals.Get(Loop));
+            EVOEFLUserActivity.EVO_EFL_ActivityOrdinal := OptionOrdinals.Get(Loop);
+            if not EVOEFLUserActivity.Insert() then
+                EVOEFLUserActivity.Modify();
+        end;
+    end;
+
+    procedure GenerateUserActivities(Prompt: Boolean)
+    var
+        RefreshUserActivitiesQst: Label 'Go ahead and refresh the user activities?';
+    begin
+        if Prompt then
+            if not Confirm(RefreshUserActivitiesQst, false) then
+                Error('');
+
+        GenerateUserActivities();
+    end;
+
+    var
+        EVOEFLLicensing: Codeunit EVO_EFL_Licensing;
+}
