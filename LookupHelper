@@ -1,0 +1,125 @@
+codeunit 71129625 EVO_EFL_EnterFieldLookups
+{
+    // This codeunit is designed as a central location for triggering the look-ups that are done
+    // as a result of the input field dialog. We use this single location so as to reduce the
+    // number of subscribers to the main lookup on the page. This way we can also control
+    // any filters that should be applied too
+
+    // This subscriber links to the input dialog box and allows us to launch a list
+    [EventSubscriber(ObjectType::Page, Page::EVO_EFL_InputDialog, LookupTableFiltered, '', false, false)]
+    local procedure LookupTableFiltered(LookUpTableID: Integer; LookupTableFilter: Text; var EnteredData: Text)
+    begin
+        case LookUpTableID of
+            Database::"G/L Account":
+                LookupGLAccount(LookupTableFilter, EnteredData);
+            Database::Item:
+                LookupItem(LookupTableFilter, EnteredData);
+            Database::Vendor:
+                LookupVendor(LookupTableFilter, EnteredData);
+            Database::Customer:
+                LookupCustomer(LookupTableFilter, EnteredData);
+            Database::"Config. Template Header":
+                LookupConfigTemplateHeader(LookupTableFilter, EnteredData);
+            else
+                LookupTableIDCaseElse(LookUpTableID, LookupTableFilter, EnteredData)
+        end;
+    end;
+
+    local procedure LookupGLAccount(LookupTableFilter: Text; var EnteredData: Text)
+    var
+        GLAccount: Record "G/L Account";
+        GLAccountList: Page "G/L Account List";
+    begin
+        if LookupTableFilter <> '' then
+            GLAccount.SetView(LookupTableFilter);
+
+        GLAccountList.Editable(false);
+        GLAccountList.LookupMode(true);
+        GLAccountList.SetTableView(GLAccount);
+        if GLAccountList.RunModal() in [Action::LookupOK] then begin
+            GLAccountList.GetRecord(GLAccount);
+            EnteredData := GLAccount."No.";
+        end else
+            Error('');
+    end;
+
+
+    local procedure LookupItem(LookupTableFilter: Text; var EnteredData: Text)
+    var
+        Item: Record Item;
+        ItemList: Page "Item List";
+    begin
+        if LookupTableFilter <> '' then
+            Item.SetView(LookupTableFilter);
+
+        ItemList.Editable(false);
+        ItemList.LookupMode(true);
+        ItemList.SetTableView(Item);
+        if ItemList.RunModal() in [Action::LookupOK] then begin
+            ItemList.GetRecord(Item);
+            EnteredData := Item."No.";
+        end else
+            Error('');
+    end;
+
+    local procedure LookupVendor(LookupTableFilter: Text; var EnteredData: Text)
+    var
+        Vendor: Record Vendor;
+        VendorList: Page "Vendor List";
+    begin
+        if LookupTableFilter <> '' then
+            Vendor.SetView(LookupTableFilter);
+
+        VendorList.Editable(false);
+        VendorList.LookupMode(true);
+        VendorList.SetTableView(Vendor);
+        if VendorList.RunModal() in [Action::LookupOK] then begin
+            VendorList.GetRecord(Vendor);
+            EnteredData := Vendor."No.";
+        end else
+            Error('');
+    end;
+
+    local procedure LookupCustomer(LookupTableFilter: Text; var EnteredData: Text)
+    var
+        Customer: Record Customer;
+        CustomerList: Page "Customer List";
+    begin
+        if LookupTableFilter <> '' then
+            Customer.SetView(LookupTableFilter);
+
+        CustomerList.Editable(false);
+        CustomerList.LookupMode(true);
+        CustomerList.SetTableView(Customer);
+        if CustomerList.RunModal() in [Action::LookupOK] then begin
+            CustomerList.GetRecord(Customer);
+            EnteredData := Customer."No.";
+        end else
+            Error('');
+    end;
+
+    local procedure LookupConfigTemplateHeader(LookupTableFilter: Text; var EnteredData: Text)
+    var
+        ConfigTemplateHeader: Record "Config. Template Header";
+        ConfigTemplates: Page "Config Templates";
+    begin
+        if LookupTableFilter <> '' then
+            ConfigTemplateHeader.SetView(LookupTableFilter);
+
+        ConfigTemplates.Editable(false);
+        ConfigTemplates.LookupMode(true);
+        ConfigTemplates.SetTableView(ConfigTemplateHeader);
+        if ConfigTemplates.RunModal() in [Action::LookupOK] then begin
+            ConfigTemplates.GetRecord(ConfigTemplateHeader);
+            EnteredData := ConfigTemplateHeader.Code;
+        end else
+            Error('');
+    end;
+
+
+
+    [IntegrationEvent(false, false)]
+    local procedure LookupTableIDCaseElse(LookUpTableID: Integer; LookupTableFilter: Text; var EnteredData: Text)
+    begin
+    end;
+}
