@@ -1,0 +1,407 @@
+codeunit 71129579 EVO_EFL_DirectShipmentMgt
+{
+    var
+        OrderLineType: Option "Special Order","Drop Shipment";
+
+    // Drop Shipment
+    //
+    procedure MakeDropShipmentPurchaseOrderFromSalesOrder(var SalesHeader: Record "Sales Header")
+    var
+        Item: Record Item;
+        SalesLine: Record "Sales Line";
+        PurchaseHeader: Record "Purchase Header";
+        PurchaseLine: Record "Purchase Line";
+        TempPurchaseHeader: Record "Purchase Header" temporary;
+        TempPurchaseLine: Record "Purchase Line" temporary;
+
+        NoDropShipmentLinesErr: Label 'There are no drop shipment lines available on %1 %2.', Comment = '%1 - Document Type, %2 - Document No.';
+        SinglePurchaseOrderCreatedMsg: Label 'Purchase order %1 has been created.', Comment = '%1 - Purchase Order No.';
+        MultiplePurchaseOrdersCreatedMsg: Label '%1 purchase orders have been created.', Comment = '%1 - Number of Documents created.';
+    begin
+        SalesHeader.TestField("Document Type", SalesHeader."Document Type"::Order);
+        SalesHeader.TestField(Status, SalesHeader.Status::Released);
+
+        CheckLocationIsSameAcrossSalesLines(SalesHeader, OrderLineType::"Drop Shipment");
+
+        SalesLine.LockTable();
+        SalesLine.SetCurrentKey("Document Type", "Document No.", Type, "Drop Shipment", "Purchase Order No.", "Purch. Order Line No.");
+        SalesLine.SetRange("Document Type", SalesHeader."Document Type");
+        SalesLine.SetRange("Document No.", SalesHeader."No.");
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetFilter("No.", '<>%1', '');
+        SalesLine.SetRange("Drop Shipment", true);
+        SalesLine.SetRange("Purch. Order Line No.", 0);
+        if SalesLine.IsEmpty() then
+            Error(NoDropShipmentLinesErr, SalesHeader."Document Type", SalesHeader."No.");
+
+        SalesLine.FindSet();
+        repeat
+            Item.Get(SalesLine."No.");
+            Item.TestField("Vendor No.");
+            TempPurchaseLine.Init();
+            TempPurchaseLine.EVO_EFL_SetHideWarnings(true);
+            TempPurchaseLine."Line No." := TempPurchaseLine."Line No." + 10000;
+            TempPurchaseLine."Buy-from Vendor No." := Item."Vendor No.";
+            TempPurchaseLine.Type := TempPurchaseLine.Type::Item;
+            TempPurchaseLine."No." := SalesLine."No.";
+            TempPurchaseLine."Variant Code" := SalesLine."Variant Code";
+            TempPurchaseLine."Unit of Measure Code" := SalesLine."Unit of Measure Code";
+            TempPurchaseLine.Quantity := SalesLine.Quantity;
+            TempPurchaseLine."Sales Order No." := SalesLine."Document No.";
+            TempPurchaseLine."Sales Order Line No." := SalesLine."Line No.";
+            TempPurchaseLine."Drop Shipment" := true;
+            TempPurchaseLine."Purchasing Code" := SalesLine."Purchasing Code";
+            TempPurchaseLine."Location Code" := SalesLine."Location Code";
+            TempPurchaseLine.Insert();
+        until SalesLine.Next() = 0;
+
+        while TempPurchaseLine.FindFirst() do begin
+            TempPurchaseLine.SetRange("Buy-from Vendor No.", TempPurchaseLine."Buy-from Vendor No.");
+
+            PurchaseHeader.Init();
+            PurchaseHeader.Validate("Document Type", PurchaseHeader."Document Type"::Order);
+            PurchaseHeader."No." := '';
+            PurchaseHeader.Insert(true);
+            PurchaseHeader.Validate("Buy-from Vendor No.", TempPurchaseLine."Buy-from Vendor No.");
+            PurchaseHeader."Expected Receipt Date" := SalesHeader."Requested Delivery Date";
+            PurchaseHeader.Validate("Location Code", SalesHeader."Location Code");
+            PurchaseHeader."Sell-to Customer No." := SalesHeader."Sell-to Customer No.";
+            PurchaseHeader."Ship-to Code" := SalesHeader."Ship-to Code";
+            PurchaseHeader."Ship-to Name" := SalesHeader."Ship-to Name";
+            PurchaseHeader."Ship-to Name 2" := SalesHeader."Ship-to Name 2";
+            PurchaseHeader."Ship-to Address" := SalesHeader."Ship-to Address";
+            PurchaseHeader."Ship-to Address 2" := SalesHeader."Ship-to Address 2";
+            PurchaseHeader."Ship-to City" := SalesHeader."Ship-to City";
+            PurchaseHeader."Ship-to Contact" := SalesHeader."Ship-to Contact";
+            PurchaseHeader."Ship-to Post Code" := SalesHeader."Ship-to Post Code";
+            PurchaseHeader."Ship-to County" := SalesHeader."Ship-to County";
+            PurchaseHeader.Validate("Ship-to Country/Region Code", SalesHeader."Ship-to Country/Region Code");
+
+            OnBeforeModifyDropShipmentPurchaseHeader(PurchaseHeader, SalesHeader);
+            PurchaseHeader.Modify();
+
+            TempPurchaseHeader := PurchaseHeader;
+            TempPurchaseHeader.Insert();
+            repeat
+                SalesLine.Get(SalesHeader."Document Type", TempPurchaseLine."Sales Order No.", TempPurchaseLine."Sales Order Line No.");
+                PurchaseLine.Init();
+                PurchaseLine.EVO_EFL_SetHideWarnings(true);
+                PurchaseLine.Validate("Document Type", PurchaseHeader."Document Type");
+                PurchaseLine.Validate("Document No.", PurchaseHeader."No.");
+                PurchaseLine.Validate("Line No.", TempPurchaseLine."Line No.");
+                PurchaseLine.Insert(true);
+                PurchaseLine.Validate(Type, PurchaseLine.Type::Item);
+                PurchaseLine.Validate("No.", TempPurchaseLine."No.");
+                PurchaseLine.Validate("Variant Code", TempPurchaseLine."Variant Code");
+                PurchaseLine.Validate("Location Code", TempPurchaseLine."Location Code");
+                PurchaseLine.Validate(Quantity, TempPurchaseLine.Quantity);
+                PurchaseLine.Validate("Unit of Measure Code", TempPurchaseLine."Unit of Measure Code");
+                PurchaseLine."Sales Order No." := TempPurchaseLine."Sales Order No.";
+                PurchaseLine."Sales Order Line No." := TempPurchaseLine."Sales Order Line No.";
+                PurchaseLine."Drop Shipment" := TempPurchaseLine."Drop Shipment";
+                PurchaseLine."Purchasing Code" := TempPurchaseLine."Purchasing Code";
+
+                OnBeforeModifyDropShipmentPurchaseLine(PurchaseLine, SalesLine);
+                PurchaseLine.Modify(true);
+                PurchaseLine.EVO_EFL_SetHideWarnings(false);
+
+                SalesLine."Purchase Order No." := PurchaseLine."Document No.";
+                SalesLine."Purch. Order Line No." := PurchaseLine."Line No.";
+                SalesLine."Drop Shipment" := PurchaseLine."Drop Shipment";
+
+                OnBeforeModifyDropShipmentSalesLine(SalesLine, PurchaseLine);
+                SalesLine.Modify();
+            until TempPurchaseLine.Next() = 0;
+            TempPurchaseLine.DeleteAll();
+            TempPurchaseLine.SetRange("Buy-from Vendor No.");
+        end;
+
+        if TempPurchaseHeader.Count = 1 then
+            Message(SinglePurchaseOrderCreatedMsg, TempPurchaseHeader."No.")
+        else
+            Message(MultiplePurchaseOrdersCreatedMsg, TempPurchaseHeader.Count);
+    end;
+
+
+    // Special Order
+    //
+    procedure MakeSpecialPurchaseOrderFromSalesOrder(var SalesHeader: Record "Sales Header")
+    var
+        Item: Record Item;
+        SalesLine: Record "Sales Line";
+        PurchaseHeader: Record "Purchase Header";
+        PurchaseLine: Record "Purchase Line";
+        Purchasing: Record Purchasing;
+        TempPurchaseHeader: Record "Purchase Header" temporary;
+        TempPurchaseLine: Record "Purchase Line" temporary;
+
+        NoSpecialOrderLinesErr: Label 'There are no special order lines available on %1 %2.', Comment = '%1 - Document Type, %2 - Document No.';
+        SinglePurchaseOrderCreatedMsg: Label 'Purchase order %1 has been created.', Comment = '%1 - Purchase Order No.';
+        MultiplePurchaseOrdersCreatedMsg: Label '%1 purchase orders have been created.', Comment = '%1 - Number of Documents created.';
+    begin
+        SalesHeader.TestField("Document Type", SalesHeader."Document Type"::Order);
+        SalesHeader.TestField(Status, SalesHeader.Status::Released);
+
+        CheckLocationIsSameAcrossSalesLines(SalesHeader, OrderLineType::"Special Order");
+
+        SalesLine.LockTable();
+        SalesLine.SetCurrentKey("Document Type", "Document No.", Type, "Special Order", "Special Order Purchase No.", "Special Order Purch. Line No.");
+        SalesLine.SetRange("Document Type", SalesHeader."Document Type");
+        SalesLine.SetRange("Document No.", SalesHeader."No.");
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetFilter("No.", '<>%1', '');
+        SalesLine.SetRange("Special Order", true);
+        SalesLine.SetRange("Special Order Purch. Line No.", 0);
+
+        if not SalesLine.FindSet() then
+            Error(NoSpecialOrderLinesErr, SalesHeader."Document Type", SalesHeader."No.");
+
+        SalesLine.FindSet();
+        repeat
+            if Purchasing.Get(SalesLine."Purchasing Code") then
+                if Purchasing."Special Order" then begin
+                    Item.Get(SalesLine."No.");
+                    Item.TestField("Vendor No.");
+                    TempPurchaseLine.Init();
+                    TempPurchaseLine.EVO_EFL_SetHideWarnings(true);
+                    TempPurchaseLine."Line No." := TempPurchaseLine."Line No." + 10000;
+                    TempPurchaseLine."Buy-from Vendor No." := Item."Vendor No.";
+                    TempPurchaseLine.Type := TempPurchaseLine.Type::Item;
+                    TempPurchaseLine."No." := SalesLine."No.";
+                    TempPurchaseLine."Variant Code" := SalesLine."Variant Code";
+                    TempPurchaseLine."Unit of Measure Code" := SalesLine."Unit of Measure Code";
+                    TempPurchaseLine.Quantity := SalesLine.Quantity;
+                    TempPurchaseLine."Special Order" := true;
+                    TempPurchaseLine."Special Order Sales No." := SalesLine."Document No.";
+                    TempPurchaseLine."Special Order Sales Line No." := SalesLine."Line No.";
+                    TempPurchaseLine."Purchasing Code" := SalesLine."Purchasing Code";
+                    TempPurchaseLine."Location Code" := SalesLine."Location Code";
+                    TempPurchaseLine.Insert();
+                end;
+        until SalesLine.Next() = 0;
+
+        while TempPurchaseLine.FindFirst() do begin
+            TempPurchaseLine.SetRange("Buy-from Vendor No.", TempPurchaseLine."Buy-from Vendor No.");
+
+            PurchaseHeader.Init();
+            PurchaseHeader."Document Type" := PurchaseHeader."Document Type"::Order;
+            PurchaseHeader."No." := '';
+            PurchaseHeader.Insert(true);
+            PurchaseHeader.Validate("Buy-from Vendor No.", TempPurchaseLine."Buy-from Vendor No.");
+            PurchaseHeader."Expected Receipt Date" := SalesHeader."Requested Delivery Date";
+            PurchaseHeader.Validate("Location Code", SalesHeader."Location Code");
+            PurchaseHeader."Sell-to Customer No." := SalesHeader."Sell-to Customer No.";
+            PurchaseHeader."Ship-to Code" := SalesHeader."Ship-to Code";
+            PurchaseHeader."Ship-to Name" := SalesHeader."Ship-to Name";
+            PurchaseHeader."Ship-to Name 2" := SalesHeader."Ship-to Name 2";
+            PurchaseHeader."Ship-to Address" := SalesHeader."Ship-to Address";
+            PurchaseHeader."Ship-to Address 2" := SalesHeader."Ship-to Address 2";
+            PurchaseHeader."Ship-to City" := SalesHeader."Ship-to City";
+            PurchaseHeader."Ship-to Contact" := SalesHeader."Ship-to Contact";
+            PurchaseHeader."Ship-to Post Code" := SalesHeader."Ship-to Post Code";
+            PurchaseHeader."Ship-to County" := SalesHeader."Ship-to County";
+            PurchaseHeader.Validate("Ship-to Country/Region Code", SalesHeader."Ship-to Country/Region Code");
+
+            OnBeforeModifySpecialOrderPurchaseHeader(PurchaseHeader, SalesHeader);
+            PurchaseHeader.Modify();
+            TempPurchaseHeader := PurchaseHeader;
+            TempPurchaseHeader.Insert();
+            repeat
+                SalesLine.Get(SalesHeader."Document Type", TempPurchaseLine."Special Order Sales No.", TempPurchaseLine."Special Order Sales Line No.");
+                PurchaseLine.Init();
+                PurchaseLine."Document Type" := PurchaseHeader."Document Type";
+                PurchaseLine."Document No." := PurchaseHeader."No.";
+                PurchaseLine."Line No." := TempPurchaseLine."Line No.";
+                PurchaseLine.Insert();
+                PurchaseLine.Type := PurchaseLine.Type::Item;
+                PurchaseLine.Validate("No.", TempPurchaseLine."No.");
+                PurchaseLine.Validate("Variant Code", TempPurchaseLine."Variant Code");
+                PurchaseLine.Validate("Location Code", TempPurchaseLine."Location Code");
+                PurchaseLine.Validate(Quantity, TempPurchaseLine.Quantity);
+                PurchaseLine.Validate("Unit of Measure Code", TempPurchaseLine."Unit of Measure Code");
+                PurchaseLine."Special Order" := true;
+                PurchaseLine."Special Order Sales No." := TempPurchaseLine."Special Order Sales No.";
+                PurchaseLine."Special Order Sales Line No." := TempPurchaseLine."Special Order Sales Line No.";
+                OnBeforeModifySpecialOrderPurchaseLine(PurchaseLine, SalesLine);
+                PurchaseLine.Modify(true);
+
+                SalesLine."Special Order" := true;
+                SalesLine."Special Order Purchase No." := PurchaseLine."Document No.";
+                SalesLine."Special Order Purch. Line No." := PurchaseLine."Line No.";
+                OnBeforeModifySpecialOrderSalesLine(SalesLine, PurchaseLine);
+                SalesLine.Modify();
+
+            until TempPurchaseLine.Next() = 0;
+            TempPurchaseLine.DeleteAll();
+            TempPurchaseLine.SetRange("Buy-from Vendor No.");
+        end;
+
+        if TempPurchaseHeader.Count = 1 then
+            Message(SinglePurchaseOrderCreatedMsg, TempPurchaseHeader."No.")
+        else
+            Message(MultiplePurchaseOrdersCreatedMsg, TempPurchaseHeader.Count);
+    end;
+
+
+    // Break relationship
+    //
+    procedure BreakPurchaseRelationshipWithSalesOrder(var SalesHeader: Record "Sales Header"; ShowMessages: Boolean)
+    var
+        CompanyInformation: Record "Company Information";
+        SpecialSalesLine: Record "Sales Line";
+        DropSalesLine: Record "Sales Line";
+        SalesLine: Record "Sales Line";
+
+        PurchaseHeader: Record "Purchase Header";
+        PurchaseLine: Record "Purchase Line";
+
+        TempPurchaseHeader: Record "Purchase Header" temporary;
+
+        ReleaseSalesDocument: Codeunit "Release Sales Document";
+        ReleasePurchaseDocument: Codeunit "Release Purchase Document";
+
+        NoDropOrSpecialLinesErr: Label 'No drop shipment or special order lines exist for %1 %2.', Comment = '%1 - Document Type, %2 - Document No.';
+        BreakLinesQst: Label 'Break links between %1 %2 and associated drop shipment and special purchase orders?', Comment = '%1 - Document Type, %2 - Document No.';
+        NowSetWhseMsg: Label '%1 %2 is now ready for supply from a warehouse.', Comment = '%1 - Document Type, %2 - Document No.';
+    begin
+        CompanyInformation.Get();
+        CompanyInformation.TestField("Location Code");
+
+        SpecialSalesLine.SetRange("Special Order", true);
+        SpecialSalesLine.SetFilter("Special Order Purch. Line No.", '>0');
+
+        DropSalesLine.SetRange("Drop Shipment", true);
+        DropSalesLine.SetFilter("Purch. Order Line No.", '>0');
+
+        if SpecialSalesLine.IsEmpty() and DropSalesLine.IsEmpty then
+            Error(NoDropOrSpecialLinesErr, SalesHeader."Document Type", SalesHeader."No.");
+
+        if not Confirm(BreakLinesQst, false, SalesHeader."Document Type", SalesHeader."No.") then
+            exit;
+
+        ReleaseSalesDocument.Reopen(SalesHeader);
+        Clear(SalesLine);
+        SalesLine.SetRange("Document Type", SalesHeader."Document Type");
+        SalesLine.SetRange("Document No.", SalesHeader."No.");
+        if SalesLine.FindSet() then
+            repeat
+                if (SalesLine."Purch. Order Line No." > 0) or (SalesLine."Special Order Purch. Line No." > 0) then begin
+                    if SalesLine."Purch. Order Line No." > 0 then
+                        PurchaseLine.Get(PurchaseLine."Document Type"::Order, SalesLine."Purchase Order No.", SalesLine."Purch. Order Line No.")
+                    else
+                        PurchaseLine.Get(PurchaseLine."Document Type"::Order, SalesLine."Special Order Purchase No.", SalesLine."Special Order Purch. Line No.");
+                    PurchaseHeader.Get(PurchaseLine."Document Type", PurchaseLine."Document No.");
+                    if PurchaseHeader.Status <> PurchaseHeader.Status::Open then begin
+                        ReleasePurchaseDocument.Reopen(PurchaseHeader);
+                        PurchaseLine.Get(PurchaseLine."Document Type", PurchaseLine."Document No.", PurchaseLine."Line No.");   // refresh
+                    end;
+
+                    if not TempPurchaseHeader.Get(PurchaseHeader."Document Type", PurchaseHeader."No.") then begin
+                        TempPurchaseHeader := PurchaseHeader;
+                        TempPurchaseHeader.Insert();
+                    end;
+
+                    // reset purchase data
+                    Clear(PurchaseLine."Purchasing Code");
+                    Clear(PurchaseLine."Drop Shipment");
+                    Clear(PurchaseLine."Sales Order No.");
+                    Clear(PurchaseLine."Sales Order Line No.");
+                    Clear(PurchaseLine."Special Order");
+                    Clear(PurchaseLine."Special Order Sales No.");
+                    Clear(PurchaseLine."Special Order Sales Line No.");
+                    PurchaseLine."Location Code" := CompanyInformation."Location Code";
+                    BreakPurchaseRelationshipWithSalesOrderOnBeforeModifyPurchaseLine(PurchaseLine);
+                    PurchaseLine.Modify();
+
+                    // reset sales data
+                    Clear(SalesLine."Purchasing Code");
+                    Clear(SalesLine."Drop Shipment");
+                    Clear(SalesLine."Purchase Order No.");
+                    Clear(SalesLine."Purch. Order Line No.");
+                    Clear(SalesLine."Special Order");
+                    Clear(SalesLine."Special Order Purchase No.");
+                    Clear(SalesLine."Special Order Purch. Line No.");
+                    SalesLine."Location Code" := CompanyInformation."Location Code";
+                    BreakPurchaseRelationshipWithSalesOrderOnBeforeModifySalesLine(SalesLine);
+                    SalesLine.Modify();
+                end;
+            until SalesLine.Next() = 0;
+
+        SalesHeader.Validate("Location Code", CompanyInformation."Location Code");
+        SalesHeader.Modify();
+
+        if TempPurchaseHeader.FindSet() then
+            repeat
+                PurchaseHeader.Get(TempPurchaseHeader."Document Type", TempPurchaseHeader."No.");
+                Clear(PurchaseHeader."Location Code");
+                Clear(PurchaseHeader."Ship-to Code");
+                PurchaseHeader.Validate("Sell-to Customer No.", '');
+                PurchaseHeader."Location Code" := CompanyInformation."Location Code";
+                PurchaseHeader.Modify(true);
+            until TempPurchaseHeader.Next() = 0;
+
+        if ShowMessages then
+            Message(NowSetWhseMsg, SalesHeader."Document Type", SalesHeader."No.");
+    end;
+
+    local procedure CheckLocationIsSameAcrossSalesLines(var SalesHeader: Record "Sales Header"; OrderType: Option "Special Order","Drop Shipment")
+    var
+        SalesLine: Record "Sales Line";
+        LocationCodeErr: Label 'The location code must be the same on the sales header and lines for special orders and drop shipments.';
+    begin
+        SalesLine.SetRange("Document Type", SalesHeader."Document Type");
+        SalesLine.SetRange("Document No.", SalesHeader."No.");
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        case OrderType of
+            OrderType::"Special Order":
+                SalesLine.SetRange("Special Order", true);
+            OrderType::"Drop Shipment":
+                SalesLine.SetRange("Drop Shipment", true);
+        end;
+        if SalesLine.FindSet() then
+            repeat
+                if SalesLine."Location Code" <> SalesHeader."Location Code" then
+                    Error(LocationCodeErr);
+            until SalesLine.Next() = 0;
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeModifyDropShipmentPurchaseHeader(var PurchaseHeader: Record "Purchase Header"; var SalesHeader: Record "Sales Header")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeModifyDropShipmentPurchaseLine(var PurchaseLine: Record "Purchase Line"; var SalesLine: Record "Sales Line")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeModifyDropShipmentSalesLine(var SalesLine: Record "Sales Line"; var PurchaseLine: Record "Purchase Line")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeModifySpecialOrderPurchaseHeader(var PurchaseHeader: Record "Purchase Header"; var SalesHeader: Record "Sales Header")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeModifySpecialOrderPurchaseLine(var PurchaseLine: Record "Purchase Line"; var SalesLine: Record "Sales Line")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeModifySpecialOrderSalesLine(var SalesLine: Record "Sales Line"; var PurchaseLine: Record "Purchase Line")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure BreakPurchaseRelationshipWithSalesOrderOnBeforeModifyPurchaseLine(var PurchaseLine: Record "Purchase Line")
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure BreakPurchaseRelationshipWithSalesOrderOnBeforeModifySalesLine(var SalesLine: Record "Sales Line")
+    begin
+    end;
+}
