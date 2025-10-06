@@ -1,0 +1,196 @@
+codeunit 71119706 EVS_EWF_CommentsManagement
+{
+    // Copies any comments against a customer to the sales header that is passed
+    procedure CopyCustomerCommentsToSalesHeader(var SalesHeader: Record "Sales Header")
+    var
+        Customer: Record Customer;
+    begin
+        if Customer.Get(SalesHeader."Sell-to Customer No.") then
+            CopyCommentsToSalesHeader(SalesHeader, Customer.RecordId);
+    end;
+
+    // Copies any comments against a ship-to address to the sales header that is passed
+    procedure CopyShipToCommentsToSalesHeader(var SalesHeader: Record "Sales Header")
+    var
+        ShipToAddress: Record "Ship-to Address";
+    begin
+        if ShipToAddress.Get(SalesHeader."Sell-to Customer No.", SalesHeader."Ship-to Code") then
+            CopyCommentsToSalesHeader(SalesHeader, ShipToAddress.RecordId);
+    end;
+
+    // Copies comments from a sales header document to the passed warehouse shipment
+    procedure CopySalesHeaderCommentsToWarehouseShipmentHeader(var SalesHeader: Record "Sales Header"; var WarehouseShipmentHeader: Record "Warehouse Shipment Header")
+    var
+        SalesCommentLine: Record "Sales Comment Line";
+        WarehouseCommentLine: Record "Warehouse Comment Line";
+        NewLineNo: Integer;
+    begin
+        WarehouseCommentLine.SetRange("Table Name", WarehouseCommentLine."Table Name"::"Whse. Shipment");
+        WarehouseCommentLine.SetRange("No.", WarehouseShipmentHeader."No.");
+        if WarehouseCommentLine.FindLast() then
+            NewLineNo := WarehouseCommentLine."Line No." + 10000
+        else
+            NewLineNo := 10000;
+
+        SalesCommentLine.SetRange("Document Type", SalesHeader."Document Type");
+        SalesCommentLine.SetRange("No.", SalesHeader."No.");
+        SalesCommentLine.SetRange("Document Line No.", 0);
+        if SalesCommentLine.FindSet() then
+            repeat
+                WarehouseCommentLine.Init();
+                WarehouseCommentLine."Table Name" := WarehouseCommentLine."Table Name"::"Whse. Shipment";
+                WarehouseCommentLine."No." := WarehouseShipmentHeader."No.";
+                WarehouseCommentLine."Line No." := NewLineNo;
+                WarehouseCommentLine.Comment := SalesCommentLine.Comment;
+                WarehouseCommentLine.Date := SalesCommentLine.Date;
+                WarehouseCommentLine.Code := SalesCommentLine.Code;
+                WarehouseCommentLine.EVS_EWF_ShowOnPickNote := SalesCommentLine.EVS_EWF_ShowOnPickNote;
+                WarehouseCommentLine.EVS_EWF_ShowOnShipment := SalesCommentLine.EVS_EWF_ShowOnShipment;
+                WarehouseCommentLine.Insert();
+
+                NewLineNo := NewLineNo + 1;
+            until SalesCommentLine.Next() = 0;
+    end;
+
+    // Copies warehouse shipment pick comments to a pick header (identified by a warehouse acitivity line)
+    procedure CopyWarehouseShipmentPickCommentsToWarehouseActivityHeader(var WarehouseShipmentHeader: Record "Warehouse Shipment Header"; var WarehouseActivityLine: Record "Warehouse Activity Line")
+    var
+        SourceWarehouseCommentLine: Record "Warehouse Comment Line";
+        DestWarehouseCommentLine: Record "Warehouse Comment Line";
+        NewLineNo: Integer;
+    begin
+        if WarehouseActivityLine."Whse. Document Type" <> WarehouseActivityLine."Whse. Document Type"::Shipment then     // Sanity check
+            exit;
+
+        DestWarehouseCommentLine.SetRange("Table Name", DestWarehouseCommentLine."Table Name"::"Whse. Activity Header");
+        DestWarehouseCommentLine.SetRange("No.", WarehouseActivityLine."No.");
+        if DestWarehouseCommentLine.FindLast() then
+            NewLineNo := DestWarehouseCommentLine."Line No." + 10000
+        else
+            NewLineNo := 10000;
+
+        SourceWarehouseCommentLine.SetRange("Table Name", SourceWarehouseCommentLine."Table Name"::"Whse. Shipment");
+        SourceWarehouseCommentLine.SetRange("No.", WarehouseActivityLine."Whse. Document No.");
+        SourceWarehouseCommentLine.SetRange(EVS_EWF_ShowOnPickNote, true);
+        if SourceWarehouseCommentLine.FindSet() then
+            repeat
+                DestWarehouseCommentLine := SourceWarehouseCommentLine;
+                DestWarehouseCommentLine."Table Name" := DestWarehouseCommentLine."Table Name"::"Whse. Activity Header";
+                DestWarehouseCommentLine."No." := WarehouseActivityLine."No.";
+                DestWarehouseCommentLine.Type := WarehouseActivityLine."Activity Type";
+                DestWarehouseCommentLine."Line No." := NewLineNo;
+                DestWarehouseCommentLine.Insert();
+                NewLineNo := NewLineNo + 10000;
+            until SourceWarehouseCommentLine.Next() = 0;
+    end;
+
+
+    local procedure CopyCommentsToSalesHeader(var SalesHeader: Record "Sales Header"; SourceRecordId: RecordId)
+    var
+        EVSEWFPickCommentLine: Record EVS_EWF_PickCommentLine;
+        EVSEWFShipmentCommentLine: Record EVS_EWF_ShipmentCommentLine;
+        Customer: Record Customer;
+        ShipToAddress: Record "Ship-to Address";
+        SourceRecordRef: RecordRef;
+        NewLineNo: Integer;
+    begin
+        SourceRecordRef := SourceRecordId.GetRecord();
+        case SourceRecordRef.Number of
+            Database::Customer:
+                begin
+                    SourceRecordRef.SetTable(Customer);
+                    EVSEWFPickCommentLine.SetRange(EVS_EWF_CustomerNo, Customer."No.");
+                    EVSEWFPickCommentLine.SetRange(EVS_EWF_ShipToCode, '');
+
+                    EVSEWFShipmentCommentLine.SetRange(EVS_EWF_CustomerNo, Customer."No.");
+                    EVSEWFShipmentCommentLine.SetRange(EVS_EWF_ShipToCode, '');
+                end;
+
+            Database::"Ship-to Address":
+                begin
+                    SourceRecordRef.SetTable(ShipToAddress);
+                    EVSEWFPickCommentLine.SetRange(EVS_EWF_CustomerNo, ShipToAddress."Customer No.");
+                    EVSEWFPickCommentLine.SetRange(EVS_EWF_ShipToCode, ShipToAddress.Code);
+
+                    EVSEWFShipmentCommentLine.SetRange(EVS_EWF_CustomerNo, ShipToAddress."Customer No.");
+                    EVSEWFShipmentCommentLine.SetRange(EVS_EWF_ShipToCode, ShipToAddress.Code);
+                end;
+        end;
+
+        GetNextSalesCommentLineNo(SalesHeader, 0, NewLineNo);
+        if EVSEWFPickCommentLine.FindSet() then
+            repeat
+                CreateNewSalesCommentLine(SalesHeader, 0, NewLineNo, EVSEWFPickCommentLine.EVS_EWF_Comment, true, false);
+            until EVSEWFPickCommentLine.Next() = 0;
+
+        if EVSEWFShipmentCommentLine.FindSet() then
+            repeat
+                CreateNewSalesCommentLine(SalesHeader, 0, NewLineNo, EVSEWFShipmentCommentLine.EVS_EWF_Comment, false, true);
+            until EVSEWFShipmentCommentLine.Next() = 0;
+    end;
+
+    local procedure GetNextSalesCommentLineNo(var SalesHeader: Record "Sales Header"; DocumentLineNo: Integer; var NewLineNo: Integer)
+    var
+        SalesCommentLine: Record "Sales Comment Line";
+    begin
+        SalesCommentLine.SetRange("Document Type", SalesHeader."Document Type");
+        SalesCommentLine.SetRange("No.", SalesHeader."No.");
+        SalesCommentLine.SetRange("Document Line No.", DocumentLineNo);
+        if SalesCommentLine.FindLast() then
+            NewLineNo := SalesCommentLine."Line No." + 10000
+        else
+            NewLineNo := 10000;
+    end;
+
+    local procedure CreateNewSalesCommentLine(var SalesHeader: Record "Sales Header"; DocumentLineNo: Integer; var NewLineNo: Integer; Comment: Text; ShowOnPickNote: Boolean; ShowOnShipment: Boolean)
+    var
+        SalesCommentLine: Record "Sales Comment Line";
+    begin
+        SalesCommentLine.Init();
+        SalesCommentLine."Document Type" := SalesHeader."Document Type";
+        SalesCommentLine."No." := SalesHeader."No.";
+        SalesCommentLine."Document Line No." := DocumentLineNo;
+        SalesCommentLine."Line No." := NewLineNo;
+        SalesCommentLine.Comment := CopyStr(Comment, 1, MaxStrLen(SalesCommentLine.Comment));
+        SalesCommentLine.EVS_EWF_ShowOnPickNote := ShowOnPickNote;
+        SalesCommentLine.EVS_EWF_ShowOnShipment := ShowOnShipment;
+        SalesCommentLine.Insert();
+
+        NewLineNo := NewLineNo + 10000;
+    end;
+
+
+    procedure GatherPickingCommentsToText(var WarehouseActivityHeader: Record "Warehouse Activity Header") CommentText: Text
+    var
+        WarehouseCommentLine: Record "Warehouse Comment Line";
+    begin
+        WarehouseCommentLine.Reset();
+        WarehouseCommentLine.SetRange("Table Name", WarehouseCommentLine."Table Name"::"Whse. Activity Header");
+        WarehouseCommentLine.SetRange(Type, WarehouseActivityHeader.Type);
+        WarehouseCommentLine.SetRange("No.", WarehouseActivityHeader."No.");
+        CommentText := GatherText(WarehouseCommentLine);
+    end;
+
+    procedure GatherShipmentCommentsToText(var WarehouseShipmentHeader: Record "Warehouse Shipment Header") CommentText: Text
+    var
+        WarehouseCommentLine: Record "Warehouse Comment Line";
+    begin
+        WarehouseCommentLine.Reset();
+        WarehouseCommentLine.SetRange("Table Name", WarehouseCommentLine."Table Name"::"Whse. Shipment");
+        WarehouseCommentLine.SetRange("No.", WarehouseShipmentHeader."No.");
+        WarehouseCommentLine.SetRange(EVS_EWF_ShowOnShipment, true);
+        CommentText := GatherText(WarehouseCommentLine);
+    end;
+
+    local procedure GatherText(var WarehouseCommentLine: Record "Warehouse Comment Line") CommentText: Text
+    begin
+        Clear(CommentText);
+        if WarehouseCommentLine.FindSet() then
+            repeat
+                if CommentText = '' then
+                    CommentText := WarehouseCommentLine.Comment
+                else
+                    CommentText := CommentText + ' ' + WarehouseCommentLine.Comment;
+            until WarehouseCommentLine.Next() = 0;
+    end;
+}
