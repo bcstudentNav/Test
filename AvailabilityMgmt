@@ -1,0 +1,1656 @@
+codeunit 50015 DAR_COR_DarAvailabilityMgt
+{
+
+    procedure CalculateDarPhysicalStock(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        ItemLedgerEntry: Record "Item Ledger Entry";
+        CalcItem: Record Item;
+        NewEntryNo: Integer;
+        InventoryQty: Decimal;
+        SupplyDemandCaptionLocationTxt: Label 'Total Stock';
+        VariantFilter: Text;
+    begin
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        Clear(InventoryQty);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        CalcItem.Copy(Item);
+        CalcItem.SetRange("Location Filter"); //clear location filter for phyiscal stock calc
+        CalcItem.CalcFields(Inventory);
+        InventoryQty := CalcItem.Inventory;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Inventory;
+        InventoryEventBuffer."Remaining Quantity (Base)" := InventoryQty;
+        InventoryEventBuffer.Positive := (InventoryQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_PhysicalStockFlag := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+        NewEntryNo := NewEntryNo + 1;
+
+
+        // Now add in inventory events such as reservations and blocked bins
+        InventoryEventBuffer.Reset();
+        InventoryEventBuffer.SetCurrentKey(Type);
+        InventoryEventBuffer.SetRange(Type, InventoryEventBuffer.Type::Inventory);
+        InventoryEventBuffer.SetRange(DAR_COR_PhysicalStockFlag, true);
+        InventoryEventBuffer.SetRange(DAR_COR_AvailableNowFlag, true);
+        InventoryEventBuffer.SetRange(DAR_COR_TotalAvailableFlag, true);
+        if InventoryEventBuffer.FindSet() then
+            repeat
+                ItemLedgerEntry.Reset();
+                ItemLedgerEntry.SetRange("Item No.", InventoryEventBuffer."Item No.");
+                if InventoryEventBuffer."Variant Code" <> '' then
+                    ItemLedgerEntry.SetRange("Variant Code", InventoryEventBuffer."Variant Code");
+                CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Inventory,
+                  SupplyDemandCaptionLocationTxt, Database::"Item Ledger Entry", ItemLedgerEntry.GetView(), true, true, true, true, true, true, 0, '', 0);
+            until InventoryEventBuffer.Next() = 0;
+    end;
+
+
+    local procedure CalculateQtyInConsign(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        CalculateItem: Record Item;
+        ItemLedgerEntry: Record "Item Ledger Entry";
+        Location: Record Location;
+        InventoryQty: Decimal;
+        ConsignAndReturnsTxt: Label 'Less Consignment & Returns (or non-main Location Type)';
+        NewEntryNo: Integer;
+        ExclLocFilter: Text;
+        VariantFilter: Text;
+    begin
+        CalculateItem := Item;
+        CalculateItem.Copy(Item);
+        BuildExclusionLocationFilter(ExclLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+
+
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        if ExclLocFilter <> '' then begin
+            Clear(InventoryQty);
+            Location.Reset();
+            Location.SetFilter(Code, ExclLocFilter);
+            if Location.FindSet() then
+                repeat
+                    CalculateItem.Copy(Item);
+                    CalculateItem.SetFilter("Location Filter", Location.Code);
+                    CalculateItem.CalcFields(Inventory);
+                    InventoryQty += CalculateItem.Inventory;
+                until Location.Next() = 0;
+        end else
+            InventoryQty := 0;
+
+        NewEntryNo := NewEntryNo + 1;
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := CalculateItem."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Inventory;
+        InventoryEventBuffer."Remaining Quantity (Base)" := -InventoryQty;
+        InventoryEventBuffer.EVS_EIF_Description := ConsignAndReturnsTxt;
+        InventoryEventBuffer.Positive := (InventoryEventBuffer."Remaining Quantity (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_PhysicalStockFlag := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        ItemLedgerEntry.Reset();
+        ItemLedgerEntry.SetRange("Item No.", InventoryEventBuffer."Item No.");
+        ItemLedgerEntry.SetFilter("Location Code", ExclLocFilter);
+        if InventoryEventBuffer."Variant Code" <> '' then
+            ItemLedgerEntry.SetRange("Variant Code", InventoryEventBuffer."Variant Code");
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Inventory,
+                                    ConsignAndReturnsTxt, Database::"Item Ledger Entry", ItemLedgerEntry.GetView(), true, true, true, true, true, false, 0, '', 0);
+
+    end;
+
+    local procedure CalculateGoodQuarantine(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        CalculateItem: Record Item;
+        BinContent: Record "Bin Content";
+        Location: Record Location;
+        GoodQuarantineTxt: Label 'Add Good Quarantine';
+        NewEntryNo: Integer;
+        GoodQuarantineQty: Decimal;
+        MainLocFilter: Text;
+        VariantFilter: Text;
+    begin
+        CalculateItem := Item;
+        CalculateItem.Copy(Item);
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        Clear(GoodQuarantineQty);
+        Location.Reset();
+        Location.SetFilter(Code, MainLocFilter);
+        if Location.FindSet() then
+            repeat
+                CalculateItem.Copy(Item);
+                CalculateItem.SetFilter("Location Filter", Location.Code);
+                BinContent.Reset();
+                GoodQuarantineQty += GetGoodQuarantineBinContents(CalculateItem."No.", CalculateItem."Variant Filter", Location.Code, BinContent);
+            until Location.Next() = 0;
+
+        NewEntryNo := NewEntryNo + 1;
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := CalculateItem."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := BinContent.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Inventory;
+        InventoryEventBuffer."Remaining Quantity (Base)" := GoodQuarantineQty;
+        InventoryEventBuffer.EVS_EIF_Description := GoodQuarantineTxt;
+        InventoryEventBuffer.Positive := (InventoryEventBuffer."Remaining Quantity (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_GoodQuarantineFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        BinContent.Reset();
+        BinContent.SetFilter("Location Code", MainLocFilter);
+        BinContent.SetRange("Item No.", InventoryEventBuffer."Item No.");
+        if InventoryEventBuffer."Variant Code" <> '' then
+            BinContent.SetRange("Variant Code", InventoryEventBuffer."Variant Code");
+        BinContent.SetFilter(EVS_EIF_BlockedReasonCode, '<>%1', '');
+        BinContent.SetRange(DAR_QUA_ShowAvailable, true);
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Inventory,
+          GoodQuarantineTxt, Database::"Bin Content", BinContent.GetView(), false, true, false, false, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateQAQuarantine(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        CalculateItem: Record Item;
+        BinContent: Record "Bin Content";
+        Location: Record Location;
+        QuarantineTxt: Label 'Less QA Quarantine';
+        NewEntryNo: Integer;
+        QuarantineQty: Decimal;
+        MainLocFilter: Text;
+        VariantFilter: Text;
+    begin
+        CalculateItem := Item;
+        CalculateItem.Copy(Item);
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        Clear(QuarantineQty);
+        Location.Reset();
+        Location.SetFilter(Code, MainLocFilter);
+        if Location.FindSet() then
+            repeat
+                CalculateItem.Copy(Item);
+                CalculateItem.SetFilter("Location Filter", Location.Code);
+                BinContent.Reset();
+                QuarantineQty += GetQAQuarantineBinContents(CalculateItem."No.", CalculateItem."Variant Filter", Location.Code, BinContent);
+            until Location.Next() = 0;
+
+        NewEntryNo := NewEntryNo + 1;
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := CalculateItem."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := BinContent.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Inventory;
+        InventoryEventBuffer."Remaining Quantity (Base)" -= QuarantineQty;
+        InventoryEventBuffer.EVS_EIF_Description := QuarantineTxt;
+        InventoryEventBuffer.Positive := (InventoryEventBuffer."Remaining Quantity (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_QuarantineFlag := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        BinContent.Reset();
+        BinContent.SetFilter("Location Code", MainLocFilter);
+        BinContent.SetRange("Item No.", InventoryEventBuffer."Item No.");
+        if InventoryEventBuffer."Variant Code" <> '' then
+            BinContent.SetRange("Variant Code", InventoryEventBuffer."Variant Code");
+        BinContent.SetFilter(EVS_EIF_BlockedReasonCode, '<>%1', '');
+        BinContent.SetRange(DAR_QUA_ShowAvailable, false);
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Inventory,
+          QuarantineTxt, Database::"Bin Content", BinContent.GetView(), false, false, true, true, true, false, 0, '', 0)
+
+    end;
+
+    local procedure CalculateQtyOnSalesDueToday(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        SalesLine: Record "Sales Line";
+        SalesOrderDueTodayLbl: Label 'Less Sales Orders Due Today (Excl. Assemble to Order)';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        OutstandingSalesQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(OutstandingSalesQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        SalesLine.Reset();
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetRange("No.", Item."No.");
+        SalesLine.SetFilter("Location Code", MainLocFilter);
+        SalesLine.SetFilter("Qty. to Assemble to Order", '%1', 0);
+        if VariantFilter <> '' then
+            SalesLine.SetFilter("Variant Code", VariantFilter);
+        SalesLine.SetFilter("Outstanding Qty. (Base)", '<>0');
+        SalesLine.SetFilter("Requested Delivery Date", '..%1', CalcDate('<+1D>', Today()));
+        if SalesLine.FindSet() then
+            repeat
+                if SalesLine."Outstanding Qty. (Base)" > 0 then
+                    OutstandingSalesQty -= SalesLine."Outstanding Qty. (Base)";
+            until SalesLine.Next() = 0;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := OutstandingSalesQty;
+        InventoryEventBuffer.EVS_EIF_Description := SalesOrderDueTodayLbl;
+        InventoryEventBuffer.Positive := (OutstandingSalesQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, SalesOrderDueTodayLbl, Database::"Sales Line", SalesLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateQtyOnSalesDueFuture(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        SalesLine: Record "Sales Line";
+        SalesOrderResFutureLbl: Label 'Less Sales Orders Reserved in the Future (Excl. Assemble to Order)';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        OutstandingSalesQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(OutstandingSalesQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        SalesLine.Reset();
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetRange("No.", Item."No.");
+        SalesLine.SetFilter("Location Code", MainLocFilter);
+        if VariantFilter <> '' then
+            SalesLine.SetFilter("Variant Code", VariantFilter);
+        SalesLine.SetFilter("Outstanding Qty. (Base)", '<>0');
+        SalesLine.SetFilter("Requested Delivery Date", '>%1', CalcDate('<+1D>', Today()));
+        SalesLine.SetFilter("Qty. to Assemble to Order", '%1', 0);
+        if SalesLine.FindSet() then begin
+            SalesLine.CalcFields("Reserved Qty. (Base)", "Whse. Outstanding Qty. (Base)");
+            repeat
+                if SalesLine."Reserved Qty. (Base)" > 0 then
+                    OutstandingSalesQty -= SalesLine."Outstanding Qty. (Base)";
+            until SalesLine.Next() = 0;
+        end;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" -= SalesLine."Reserved Qty. (Base)";
+        InventoryEventBuffer.EVS_EIF_Description := SalesOrderResFutureLbl;
+        InventoryEventBuffer.Positive := (SalesLine."Outstanding Qty. (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, SalesOrderResFutureLbl, Database::"Sales Line", SalesLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+
+    end;
+
+    local procedure CalculateWhseShptLinesToConsignment(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        WarehouseShipmentLine: Record "Warehouse Shipment Line";
+        WhseShptToConsignLbl: Label 'Less Whse. Shpt. Lines to Consignment';
+        ConsignLocFilter: Text;
+        NewEntryNo: Integer;
+        VariantFilter: Text;
+    begin
+        BuildConsignLocationFilter(ConsignLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        WarehouseShipmentLine.SetRange("Destination Type", WarehouseShipmentLine."Destination Type"::Location);
+        WarehouseShipmentLine.SetFilter("Destination No.", ConsignLocFilter);
+        WarehouseShipmentLine.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            WarehouseShipmentLine.SetRange("Variant Code", VariantFilter);
+        WarehouseShipmentLine.CalcSums("Qty. Outstanding (Base)");
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Transfer;
+        InventoryEventBuffer."Remaining Quantity (Base)" -= WarehouseShipmentLine."Qty. Outstanding (Base)";
+        InventoryEventBuffer.EVS_EIF_Description := WhseShptToConsignLbl;
+        InventoryEventBuffer.Positive := (WarehouseShipmentLine."Qty. Outstanding (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Transfer, WhseShptToConsignLbl, Database::"Warehouse Shipment Line", WarehouseShipmentLine.GetView(), false, false, false, false, true, false, 0, '', 0);
+    end;
+
+    local procedure CalculateWhseShptLinesForSales(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        WarehouseShipmentLine: Record "Warehouse Shipment Line";
+        WhseShptForSalesLbl: Label 'Less Whse. Shpt. Lines for Sales';
+        NewEntryNo: Integer;
+        MainLocFilter: Text;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        WarehouseShipmentLine.SetFilter("Destination Type", '<>%1', WarehouseShipmentLine."Destination Type"::Location);
+        WarehouseShipmentLine.SetFilter("Location Code", MainLocFilter);
+        WarehouseShipmentLine.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            WarehouseShipmentLine.SetRange("Variant Code", VariantFilter);
+        WarehouseShipmentLine.CalcSums("Qty. Outstanding (Base)");
+
+        NewEntryNo := NewEntryNo + 1;
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Transfer;
+        InventoryEventBuffer."Remaining Quantity (Base)" -= WarehouseShipmentLine."Qty. Outstanding (Base)";
+        InventoryEventBuffer.EVS_EIF_Description := WhseShptForSalesLbl;
+        InventoryEventBuffer.Positive := (WarehouseShipmentLine."Qty. Outstanding (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Transfer, WhseShptForSalesLbl, Database::"Warehouse Shipment Line", WarehouseShipmentLine.GetView(), false, false, false, false, true, false, 0, '', 0);
+    end;
+
+    local procedure CalculateTransferToConsign(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        TransferLine: Record "Transfer Line";
+        TransferToConsignLbl: Label 'Less Transfer Lines to Consignment';
+        NewEntryNo: Integer;
+        ConsignLocFilter: Text;
+        VariantFilter: Text;
+    begin
+        BuildConsignLocationFilter(ConsignLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        TransferLine.SetFilter("Transfer-to Code", ConsignLocFilter);
+        TransferLine.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            TransferLine.SetRange("Variant Code", VariantFilter);
+        TransferLine.SetFilter("Outstanding Qty. (Base)", '<>0');
+        TransferLine.SetFilter("Shipment Date", '..%1', Today());
+        TransferLine.CalcSums("Outstanding Qty. (Base)");
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Transfer;
+        InventoryEventBuffer."Remaining Quantity (Base)" -= TransferLine."Outstanding Qty. (Base)";
+        InventoryEventBuffer.EVS_EIF_Description := TransferToConsignLbl;
+        InventoryEventBuffer.Positive := (TransferLine."Outstanding Qty. (Base)" >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Transfer, TransferToConsignLbl, Database::"Transfer Line", TransferLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateTransferToConsignDueFuture(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        TransferLine: Record "Transfer Line";
+        TransferToConsignDueFutureLbl: Label 'Less Transfer Lines to Consignment Due Future';
+        NewEntryNo: Integer;
+        TransferQtyToConsignDueFuture: Decimal;
+        ConsignLocFilter: Text;
+        VariantFilter: Text;
+    begin
+        BuildConsignLocationFilter(ConsignLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        TransferLine.SetFilter("Transfer-to Code", ConsignLocFilter);
+        TransferLine.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            TransferLine.SetRange("Variant Code", VariantFilter);
+        TransferLine.SetFilter("Outstanding Qty. (Base)", '<>0');
+        TransferLine.SetFilter("Shipment Date", '>%1', Today());
+        Clear(TransferQtyToConsignDueFuture);
+        if TransferLine.FindSet() then
+            repeat
+                //No need to include Whse Shipments any more as they have to be reserved
+                TransferLine.CalcFields("Reserved Qty. Outbnd. (Base)");
+                TransferQtyToConsignDueFuture += TransferLine."Reserved Qty. Outbnd. (Base)";
+            until TransferLine.Next() = 0;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Transfer;
+        InventoryEventBuffer."Remaining Quantity (Base)" -= TransferQtyToConsignDueFuture;
+        InventoryEventBuffer.EVS_EIF_Description := TransferToConsignDueFutureLbl;
+        InventoryEventBuffer.Positive := (TransferQtyToConsignDueFuture >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Transfer, TransferToConsignDueFutureLbl, Database::"Transfer Line", TransferLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateAssembledQtyThatCanBeMade(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        BomComponent: Record "BOM Component";
+        BOMComponentItem: Record Item;
+        TempEVSEIFInvtAvailFilterParam: Record EVS_EIF_InvtAvailFilterParam temporary;
+        SalesLine: Record "Sales Line";
+        ATOLink: Record "Assemble-to-Order Link";
+        AssemblyLine: Record "Assembly Line";
+        SingleInstance: Codeunit DAR_COR_SingleInstance;
+        EVSEIFAvailabilityManagement: Codeunit EVS_EIF_AvailabilityManagement;
+        AssembledQtyCanBeMadeLbl: Label 'Assembly Qty. that can be made';
+        MainLocFilter: Text;
+        AssemblyComponentInventory: Decimal;
+        AssemblyCanMake: Decimal;
+        AssemblyFirstCanMakeFlag: Boolean;
+        NewEntryNo: Integer;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Item.CalcFields("Assembly BOM");
+        if not Item."Assembly BOM" then
+            exit;
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        AssemblyFirstCanMakeFlag := true;
+        AssemblyCanMake := 0;
+
+        //if a sales line is set this has been done from the sales order subform to allow us to calculate qty based on that orders ATO Lines and variants
+        SingleInstance.GetSalesLine(SalesLine);
+        BomComponent.SetRange("Parent Item No.", Item."No."); //set this ready for the Inventory Buffer View only
+        if (SalesLine."No." <> '') and (Item."Assembly Policy" = Item."Assembly Policy"::"Assemble-to-Order") then begin
+            ATOLink.SetRange("Assembly Document Type", ATOLink."Assembly Document Type"::Order);
+            ATOLink.SetRange(Type, ATOLink.Type::Sale);
+            ATOLink.SetRange("Document Type", SalesLine."Document Type");
+            ATOLink.SetRange("Document No.", SalesLine."Document No.");
+            ATOLink.SetRange("Document Line No.", SalesLine."Line No.");
+            if ATOLink.FindFirst() then begin
+                AssemblyLine.SetRange("Document Type", ATOLink."Assembly Document Type");
+                AssemblyLine.SetRange("Document No.", ATOLink."Assembly Document No.");
+                AssemblyLine.SetRange(Type, AssemblyLine.Type::Item);
+                AssemblyLine.SetFilter("Remaining Quantity (Base)", '>0');
+                if AssemblyLine.FindSet() then
+                    repeat
+                        BOMComponentItem.Get(AssemblyLine."No.");
+                        if AssemblyLine."Variant Code" <> '' then
+                            BOMComponentItem.SetRange("Variant Filter", AssemblyLine."Variant Code");
+
+                        TempEVSEIFInvtAvailFilterParam.DeleteAll(true);
+                        TempEVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow := true;
+                        EVSEIFAvailabilityManagement.CalculateInventory(BOMComponentItem, TempEVSEIFInvtAvailFilterParam);
+                        AssemblyComponentInventory := TempEVSEIFInvtAvailFilterParam.DAR_COR_AvailableNowQty;
+
+                        if BomComponent."Quantity per" = 0 then
+                            BomComponent."Quantity per" := 1;
+                        if (AssemblyComponentInventory div BomComponent."Quantity per" < AssemblyCanMake) or AssemblyFirstCanMakeFlag then begin
+                            AssemblyCanMake := AssemblyComponentInventory div BomComponent."Quantity per";
+                            AssemblyFirstCanMakeFlag := false;
+                        end;
+                    until AssemblyLine.Next() = 0;
+            end;
+        end else begin
+
+            BomComponent.SetRange("Parent Item No.", Item."No.");
+            if BomComponent.FindSet() then
+                repeat
+                    //Need to get the available Quantity for each item
+                    BOMComponentItem.Get(BomComponent."No.");
+                    Clear(AssemblyComponentInventory);
+
+                    TempEVSEIFInvtAvailFilterParam.DeleteAll(true);
+                    TempEVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow := true;
+                    EVSEIFAvailabilityManagement.CalculateInventory(BOMComponentItem, TempEVSEIFInvtAvailFilterParam);
+                    AssemblyComponentInventory := TempEVSEIFInvtAvailFilterParam.DAR_COR_AvailableNowQty;
+
+                    if BomComponent."Quantity per" = 0 then
+                        BomComponent."Quantity per" := 1;
+                    if (AssemblyComponentInventory div BomComponent."Quantity per" < AssemblyCanMake) or AssemblyFirstCanMakeFlag then begin
+                        AssemblyCanMake := AssemblyComponentInventory div BomComponent."Quantity per";
+                        AssemblyFirstCanMakeFlag := false;
+                    end;
+                until BomComponent.Next() = 0;
+        end;
+
+        if AssemblyCanMake < 0 then
+            AssemblyCanMake := 0;
+
+        NewEntryNo := NewEntryNo + 1;
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Inventory;
+        InventoryEventBuffer."Remaining Quantity (Base)" := AssemblyCanMake;
+        InventoryEventBuffer.EVS_EIF_Description := AssembledQtyCanBeMadeLbl;
+        InventoryEventBuffer.Positive := (AssemblyCanMake >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.EVS_EIF_TableID := Database::"BOM Component";
+        InventoryEventBuffer.EVS_EIF_TableView := CopyStr(BomComponent.GetView(), 1, MaxStrLen(InventoryEventBuffer.EVS_EIF_TableView));
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Inventory, AssembledQtyCanBeMadeLbl, Database::"BOM Component", BomComponent.GetView(), false, false, false, true, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateBlanketOrdersDueToday(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        SalesLine: Record "Sales Line";
+        BlanketOrderDueTodayLbl: Label 'Less Blanket Orders Due Today';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        OutstandingSalesQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(OutstandingSalesQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::"Blanket Order");
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetRange("No.", Item."No.");
+        if VariantFilter <> '' then
+            SalesLine.SetRange("Variant Code", VariantFilter);
+        SalesLine.SetFilter("Outstanding Qty. (Base)", '<>0');
+        SalesLine.SetFilter("Requested Delivery Date", '..%1', CalcDate('<+1D>', Today()));
+        if SalesLine.FindSet() then
+            if SalesLine."Outstanding Qty. (Base)" > 0 then
+                repeat
+                    OutstandingSalesQty -= SalesLine."Outstanding Qty. (Base)";
+                    SalesLine.CalcFields(EVO_EFL_QtyConvToSalesOrdBase);
+                    OutstandingSalesQty += SalesLine.EVO_EFL_QtyConvToSalesOrdBase;
+                until SalesLine.Next() = 0;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := OutstandingSalesQty;
+        InventoryEventBuffer.EVS_EIF_Description := BlanketOrderDueTodayLbl;
+        InventoryEventBuffer.Positive := (OutstandingSalesQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, BlanketOrderDueTodayLbl, Database::"Sales Line", SalesLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+
+    end;
+
+    local procedure CalculateBlanketOrdersDueFuture(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        SalesLine: Record "Sales Line";
+        BlanketOrderDueFutureLbl: Label 'Less Blanket Orders Reserved in the Future';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        BlanketOrdersDueFutureQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(BlanketOrdersDueFutureQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::"Blanket Order");
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetRange("No.", Item."No.");
+        if VariantFilter <> '' then
+            SalesLine.SetRange("Variant Code", VariantFilter);
+        SalesLine.SetFilter("Outstanding Qty. (Base)", '<>0');
+        SalesLine.SetFilter("Requested Delivery Date", '>%1', CalcDate('<+1D>', Today()));
+
+        Clear(BlanketOrdersDueFutureQty);
+        if SalesLine.FindSet() then
+            repeat
+                SalesLine.CalcFields("Reserved Qty. (Base)");
+                BlanketOrdersDueFutureQty -= SalesLine."Reserved Qty. (Base)";
+            until SalesLine.Next() = 0;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := BlanketOrdersDueFutureQty;
+        InventoryEventBuffer.EVS_EIF_Description := BlanketOrderDueFutureLbl;
+        InventoryEventBuffer.Positive := (BlanketOrdersDueFutureQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, BlanketOrderDueFutureLbl, Database::"Sales Line", SalesLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+
+    end;
+
+    local procedure CalculateAssemblyComponentDemand(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        AssemblyLine: Record "Assembly Line";
+        AssembleToOrderLink: Record "Assemble-to-Order Link";
+        SalesLine: Record "Sales Line";
+        AssemblyComponentDemandLbl: Label 'Less Assembly Component Demand';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        AssemblyPastQty: Decimal;
+        AssemblyFutureAllocatedQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        if Item."Variant Filter" <> '' then
+            VariantFilter := Item.GetFilter("Variant Filter");
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        Clear(AssemblyFutureAllocatedQty);
+        Clear(AssemblyPastQty);
+        AssemblyLine.SetFilter("Location Code", MainLocFilter);
+        if Item."No." <> '' then
+            AssemblyLine.SetRange("No.", Item."No.");
+        AssemblyLine.SetFilter("Remaining Quantity", '<>0');
+        AssemblyLine.SetFilter("Document Type", '<>%1', AssemblyLine."Document Type"::Quote);
+        if VariantFilter <> '' then
+            AssemblyLine.SetFilter("Variant Code", '%1', CopyStr(VariantFilter, 1, 10));
+        AssemblyLine.SetAutoCalcFields("Reserved Qty. (Base)");
+        if AssemblyLine.FindSet() then
+            repeat
+                // Need to get the date on the shipment line.
+                if AssembleToOrderLink.Get(AssemblyLine."Document Type", AssemblyLine."Document No.") then
+                    if SalesLine.Get(AssembleToOrderLink."Document Type", AssembleToOrderLink."Document No.", AssembleToOrderLink."Document Line No.") then
+                        if SalesLine."Requested Delivery Date" < CalcDate('<+1D>', Today()) then
+                            // if in past use the Remaining Quantity
+                            AssemblyPastQty += AssemblyLine."Remaining Quantity"
+                        else
+                            // If in future use the allocated quantity
+                            AssemblyFutureAllocatedQty += AssemblyLine."Reserved Qty. (Base)";
+
+            until AssemblyLine.Next() = 0;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::"Assembly Component";
+        InventoryEventBuffer."Remaining Quantity (Base)" -= (AssemblyPastQty + AssemblyFutureAllocatedQty);
+        InventoryEventBuffer.EVS_EIF_Description := AssemblyComponentDemandLbl;
+        InventoryEventBuffer.Positive := ((AssemblyPastQty + AssemblyFutureAllocatedQty) >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Assembly, AssemblyComponentDemandLbl, Database::"Assembly Line", AssemblyLine.GetView(), false, false, false, true, false, false, 0, '', 0);
+
+    end;
+
+    local procedure CalculateSalesLineQtyReservedAgainstPurchase(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        ReservationEntry: Record "Reservation Entry";
+        SalesLinesReservedAgainstPOLbl: Label 'Add Qty. on Sales Lines Reserved to Purchase';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        ReservedQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(ReservedQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        ReservationEntry.Reset();
+        ReservationEntry.SetRange("Source Type", Database::"Sales Line");
+        ReservationEntry.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            ReservationEntry.SetRange("Variant Code", VariantFilter);
+        ReservationEntry.SetFilter("Location Code", MainLocFilter);
+        ReservationEntry.SetRange(DAR_RRV_MatchedRecSourceType, Database::"Purchase Line");
+        ReservationEntry.CalcSums(Quantity);
+        ReservedQty := (ReservationEntry.Quantity * -1);
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := ReservedQty;
+        InventoryEventBuffer.EVS_EIF_Description := SalesLinesReservedAgainstPOLbl;
+        InventoryEventBuffer.Positive := (ReservedQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, SalesLinesReservedAgainstPOLbl, Database::"Reservation Entry", ReservationEntry.GetView(), false, false, false, true, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateConsignQtyReservedAgainstPurchase(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        ReservationEntry: Record "Reservation Entry";
+        ConsignReservedAgainstPOLbl: Label 'Add Qty. on Consignment Reserved to Purchase';
+        ConsignLocFilter: Text;
+        NewEntryNo: Integer;
+        ReservedQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildConsignLocationFilter(ConsignLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(ReservedQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        ReservationEntry.Reset();
+        ReservationEntry.SetRange("Source Type", Database::"Transfer Line");
+        ReservationEntry.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            ReservationEntry.SetRange("Variant Code", VariantFilter);
+        ReservationEntry.SetFilter("Location Code", ConsignLocFilter);
+        ReservationEntry.SetRange(DAR_RRV_MatchedRecSourceType, Database::"Purchase Line");
+        ReservationEntry.CalcSums(Quantity);
+        ReservedQty := (ReservationEntry.Quantity * -1);
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := ReservedQty;
+        InventoryEventBuffer.EVS_EIF_Description := ConsignReservedAgainstPOLbl;
+        InventoryEventBuffer.Positive := (ReservedQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_AvailableNowFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, ConsignReservedAgainstPOLbl, Database::"Reservation Entry", ReservationEntry.GetView(), false, false, false, true, false, false, 0, '', 0);
+    end;
+
+    local procedure CalculateReservedDemandNotOnWhseShpt(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        ReservationEntry: Record "Reservation Entry";
+        SalesLine: Record "Sales Line";
+        AssemblyLine: Record "Assembly Line";
+        ReservedNotOnWhseShptLbl: Label 'Less Reserved not on Whse. Shpt.';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        ReservedQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(ReservedQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        //get Sales Order Demand First
+        SalesLine.Reset();
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetFilter("Outstanding Qty. (Base)", '>0');
+        SalesLine.SetFilter("Location Code", MainLocFilter);
+        if Item."No." <> '' then
+            SalesLine.SetRange("No.", Item."No.");
+        if VariantFilter <> '' then
+            SalesLine.SetRange("Variant Code", VariantFilter);
+        if SalesLine.FindSet() then begin
+            SalesLine.CalcFields("Reserved Qty. (Base)", "Whse. Outstanding Qty. (Base)");
+            if SalesLine."Reserved Qty. (Base)" <> SalesLine."Whse. Outstanding Qty. (Base)" then //can we add Whse. Shipment No. to reservation entry?
+                repeat
+                    ReservationEntry.Reset();
+                    ReservationEntry.SetRange("Item No.", SalesLine."No.");
+                    ReservationEntry.SetRange("Variant Code", SalesLine."Variant Code");
+                    ReservationEntry.SetFilter("Location Code", MainLocFilter);
+                    ReservationEntry.SetRange("Source Type", Database::"Sales Line");
+                    ReservationEntry.SetRange("Source Subtype", ReservationEntry."Source Subtype"::"1");
+                    ReservationEntry.SetRange("Source ID", SalesLine."Document No.");
+                    ReservationEntry.SetRange("Source Ref. No.", SalesLine."Line No.");
+                    ReservationEntry.SetRange(DAR_RRV_MatchedRecSourceType, Database::"Item Ledger Entry");
+                    if ReservationEntry.FindSet() then
+                        repeat
+                            ReservedQty += (ReservationEntry."Quantity (Base)" * -1);
+                        until ReservationEntry.Next() = 0;
+                until SalesLine.Next() = 0;
+        end;
+
+        //add in Assembly Line Demand
+        AssemblyLine.Reset();
+        AssemblyLine.SetRange("Document Type", AssemblyLine."Document Type"::Order);
+        AssemblyLine.SetRange(Type, SalesLine.Type::Item);
+        AssemblyLine.SetFilter("Remaining Quantity (Base)", '>0');
+        AssemblyLine.SetFilter("Location Code", MainLocFilter);
+        if Item."No." <> '' then
+            AssemblyLine.SetRange("No.", Item."No.");
+        if VariantFilter <> '' then
+            AssemblyLine.SetRange("Variant Code", VariantFilter);
+        if AssemblyLine.FindSet() then begin
+            AssemblyLine.CalcFields("Reserved Qty. (Base)"); // need to work out how to find whse qty for the assembly line
+            repeat
+                ReservationEntry.Reset();
+                ReservationEntry.SetRange("Item No.", AssemblyLine."No.");
+                ReservationEntry.SetRange("Variant Code", AssemblyLine."Variant Code");
+                ReservationEntry.SetFilter("Location Code", MainLocFilter);
+                ReservationEntry.SetRange("Source Type", Database::"Assembly Line");
+                ReservationEntry.SetRange("Source Subtype", ReservationEntry."Source Subtype"::"1");
+                ReservationEntry.SetRange("Source ID", AssemblyLine."Document No.");
+                ReservationEntry.SetRange("Source Ref. No.", AssemblyLine."Line No.");
+                ReservationEntry.SetRange(DAR_RRV_MatchedRecSourceType, Database::"Item Ledger Entry");
+                if ReservationEntry.FindSet() then
+                    ReservationEntry.SetRange("Source Subtype", ReservationEntry."Source Subtype"::"1");
+                if ReservationEntry.FindSet() then
+                    repeat
+                        ReservedQty += (ReservationEntry."Quantity (Base)");
+                    until ReservationEntry.Next() = 0;
+            until AssemblyLine.Next() = 0;
+        end;
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := (ReservedQty * -1);
+        InventoryEventBuffer.EVS_EIF_Description := ReservedNotOnWhseShptLbl;
+        InventoryEventBuffer.Positive := (ReservedQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, ReservedNotOnWhseShptLbl, Database::"Reservation Entry", ReservationEntry.GetView(), false, false, false, false, true, false, 0, '', 0);
+    end;
+
+    local procedure CalculateReservedOnBlanketOrder(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        ReservationEntry: Record "Reservation Entry";
+        ReservedBlanketOrderLbl: Label 'Less Reserved on Blanket Orders';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        ReservedQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(ReservedQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        //get Sales Order Demand First
+        if Item."No." <> '' then
+            ReservationEntry.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            ReservationEntry.SetRange("Variant Code", VariantFilter);
+        ReservationEntry.SetFilter("Location Code", MainLocFilter);
+        ReservationEntry.SetRange("Source Type", Database::"Sales Line");
+        ReservationEntry.SetRange("Source Subtype", ReservationEntry."Source Subtype"::"4"); //Blanket Order
+        ReservationEntry.SetRange(DAR_RRV_MatchedRecSourceType, Database::"Item Ledger Entry");
+        ReservationEntry.CalcSums("Quantity (Base)");
+        ReservedQty := ReservationEntry."Quantity (Base)";
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::Sale;
+        InventoryEventBuffer."Remaining Quantity (Base)" := ReservedQty;
+        InventoryEventBuffer.EVS_EIF_Description := ReservedBlanketOrderLbl;
+        InventoryEventBuffer.Positive := (ReservedQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, ReservedBlanketOrderLbl, Database::"Reservation Entry", ReservationEntry.GetView(), false, false, false, false, true, false, 0, '', 0);
+    end;
+
+    local procedure CalculateReservedOnAssemblyOrders(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    var
+        ReservationEntry: Record "Reservation Entry";
+        ReservedAssemblyOrderLbl: Label 'Less Reserved on Assembly Orders';
+        MainLocFilter: Text;
+        NewEntryNo: Integer;
+        ReservedQty: Decimal;
+        VariantFilter: Text;
+    begin
+        BuildMainLocationFilter(MainLocFilter);
+        VariantFilter := Item.GetFilter("Variant Filter");
+        Clear(ReservedQty);
+        InventoryEventBuffer.Reset();
+        if InventoryEventBuffer.FindLast() then
+            NewEntryNo := InventoryEventBuffer."Entry No." + 1
+        else
+            NewEntryNo := 1;
+
+        //get Sales Order Demand First
+        if Item."No." <> '' then
+            ReservationEntry.SetRange("Item No.", Item."No.");
+        if VariantFilter <> '' then
+            ReservationEntry.SetRange("Variant Code", VariantFilter);
+        ReservationEntry.SetFilter("Location Code", MainLocFilter);
+        ReservationEntry.SetRange("Source Type", Database::"Assembly Line");
+        ReservationEntry.SetRange(DAR_RRV_MatchedRecSourceType, Database::"Item Ledger Entry");
+        ReservationEntry.CalcSums("Quantity (Base)");
+        ReservedQty := ReservationEntry."Quantity (Base)";
+
+        InventoryEventBuffer.Init();
+        InventoryEventBuffer."Entry No." := NewEntryNo;
+        InventoryEventBuffer."Item No." := Item."No.";
+        InventoryEventBuffer."Location Code" := '';
+        InventoryEventBuffer."Variant Code" := CopyStr(VariantFilter, 1, 10);
+        InventoryEventBuffer."Source Line ID" := Item.RecordId;
+        InventoryEventBuffer.Type := InventoryEventBuffer.Type::"Assembly Component";
+        InventoryEventBuffer."Remaining Quantity (Base)" := ReservedQty;
+        InventoryEventBuffer.EVS_EIF_Description := ReservedAssemblyOrderLbl;
+        InventoryEventBuffer.Positive := (ReservedQty >= 0);
+        InventoryEventBuffer.EVS_EIF_Override := true;
+        InventoryEventBuffer.DAR_COR_TotalAvailableFlag := true;
+        InventoryEventBuffer.Insert(true);
+
+        CreateDarAvailabilityEntry(EVSEIFInventoryAvailEntry, InventoryEventBuffer, AvailabilityType::Sales, ReservedAssemblyOrderLbl, Database::"Reservation Entry", ReservationEntry.GetView(), false, false, false, false, true, false, 0, '', 0);
+    end;
+
+    procedure CalcFreeStock(PassedItem: Record Item; LocationFilter: Text) FreeStock: Decimal
+    var
+        DarSetup: Record DAR_COR_DarSetup;
+        QtyCanBeAssembled: Decimal;
+        UsableStock: Decimal;
+        QtyOnSalesOrders: Decimal;
+        QtyOnBlanketOrder: Decimal;
+        QtyOnInboundTransfer: Decimal;
+        QtyOnOutboundTransfer: Decimal;
+        QtyOnAssemblyConsumpt: Decimal;
+        QtyOnProdOrderConsumpt: Decimal;
+        QtyOnPurchaseReturn: Decimal;
+    begin
+        DarSetup.Get();
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        Clear(UsableStock);
+        UsableStock := CalcUsableStock(PassedItem, LocationFilter);
+
+        Clear(QtyCanBeAssembled);
+        QtyCanBeAssembled := CalcQtyCanBeAssembled(PassedItem, LocationFilter);
+
+        Clear(QtyOnSalesOrders);
+        QtyOnSalesOrders := CalcQtyOnSalesOrder(PassedItem, LocationFilter);
+
+        Clear(QtyOnBlanketOrder);
+        if DarSetup.DAR_COR_SalesInclBlanketOrders then
+            QtyOnBlanketOrder := CalcQtyOnBlanketOrder(PassedItem, LocationFilter);
+
+        Clear(QtyOnInboundTransfer);
+        QtyOnInboundTransfer := CalcQtyOnInboundTransfer(PassedItem, LocationFilter);
+
+        Clear(QtyOnOutboundTransfer);
+        QtyOnOutboundTransfer := CalcQtyOnOutboundTransfer(PassedItem, LocationFilter);
+
+        Clear(QtyOnAssemblyConsumpt);
+        QtyOnAssemblyConsumpt := CalcQtyOnAssemblyConsumption(PassedItem, LocationFilter);
+
+        Clear(QtyOnProdOrderConsumpt);
+        QtyOnProdOrderConsumpt := CalcQtyOnProdConsumption(PassedItem, LocationFilter);
+
+        Clear(QtyOnPurchaseReturn);
+        QtyOnPurchaseReturn := CalcQtyOnPurchaseReturn(PassedItem, LocationFilter);
+
+
+        FreeStock := (UsableStock - QtyOnSalesOrders - QtyOnBlanketOrder + QtyOnInboundTransfer - QtyOnOutboundTransfer - QtyOnAssemblyConsumpt - QtyOnProdOrderConsumpt
+                       + -QtyOnPurchaseReturn);
+    end;
+
+    procedure CalcQtyCanBeAssembled(PassedItem: Record Item; var LocationFilter: Text) QtyCanBeAssembled: Decimal
+    var
+        BomComponentItem: Record Item;
+        BomComponent: Record "BOM Component";
+        TempEVSEIFInvtAvailFilterParam: Record EVS_EIF_InvtAvailFilterParam temporary;
+        EVSEIFAvailabilityManagement: Codeunit EVS_EIF_AvailabilityManagement;
+        AssemblyFirstCanMakeFlag: Boolean;
+        AssemblyComponentInventory: Decimal;
+    begin
+        Clear(QtyCanBeAssembled);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        PassedItem.CalcFields("Assembly BOM");
+        if not PassedItem."Assembly BOM" then
+            exit;
+
+        AssemblyFirstCanMakeFlag := true;
+        BomComponent.SetRange("Parent Item No.", PassedItem."No.");
+        if BomComponent.FindSet() then
+            repeat
+                //Need to get the available Quantity for each item
+                BomComponentItem.Get(BomComponent."No.");
+                Clear(AssemblyComponentInventory);
+
+                TempEVSEIFInvtAvailFilterParam.DeleteAll(true);
+                TempEVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow := true;
+                EVSEIFAvailabilityManagement.CalculateInventory(PassedItem, TempEVSEIFInvtAvailFilterParam);
+                AssemblyComponentInventory := TempEVSEIFInvtAvailFilterParam.DAR_COR_AvailableNowQty;
+                //AssemblyComponentInventory := CalcAvailableNow(BomComponentItem, LocationFilter);
+
+
+                if BomComponent."Quantity per" = 0 then
+                    BomComponent."Quantity per" := 1;
+                if (AssemblyComponentInventory div BomComponent."Quantity per" < QtyCanBeAssembled) or AssemblyFirstCanMakeFlag then begin
+                    QtyCanBeAssembled := AssemblyComponentInventory div BomComponent."Quantity per";
+                    AssemblyFirstCanMakeFlag := false;
+                end;
+            until BomComponent.Next() = 0;
+    end;
+
+    procedure CalcUsableStock(PassedItem: Record Item; LocationFilter: Text) UsableStockQty: Decimal
+    begin
+        exit(CalcUsableStock(PassedItem, LocationFilter, ''));
+    end;
+
+    procedure CalcUsableStock(PassedItem: Record Item; LocationFilter: Text; ZoneCode: Code[10]) UsableStockQty: Decimal
+    var
+        BinContent: Record "Bin Content";
+    begin
+        Clear(UsableStockQty);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        BinContent.Reset();
+        if LocationFilter <> '' then
+            BinContent.SetFilter("Location Code", LocationFilter);
+        BinContent.SetRange("Item No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            BinContent.SetFilter("Variant Code", PassedItem."Variant Filter");
+        if ZoneCode <> '' then
+            BinContent.SetRange("Zone Code", ZoneCode);
+        BinContent.SetRange(DAR_QUA_ShowAvailable, true);
+        if BinContent.FindSet() then begin
+            BinContent.CalcFields("Quantity (Base)");
+            repeat
+                UsableStockQty += BinContent."Quantity (Base)";
+            until BinContent.Next() = 0;
+        end;
+
+    end;
+
+    procedure CalcQtyOnSalesOrder(PassedItem: Record Item; var LocationFilter: Text) QtyOnSalesOrder: Decimal
+    var
+        SalesLine: Record "Sales Line";
+    begin
+        Clear(SalesLine);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        SalesLine.Reset();
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::Order);
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetRange("No.", PassedItem."No.");
+        if LocationFilter <> '' then
+            SalesLine.SetFilter("Location Code", LocationFilter);
+        if PassedItem."Variant Filter" <> '' then
+            SalesLine.SetFilter("Variant Code", PassedItem."Variant Filter");
+        SalesLine.SetRange("Drop Shipment", false);
+        SalesLine.CalcSums("Outstanding Qty. (Base)");
+        QtyOnSalesOrder := SalesLine."Outstanding Qty. (Base)";
+
+
+    end;
+
+    procedure CalcQtyOnBlanketOrder(PassedItem: Record Item; var LocationFilter: Text) QtyOnBlanketOrder: Decimal
+    var
+        SalesLine: Record "Sales Line";
+    begin
+        Clear(QtyOnBlanketOrder);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        SalesLine.SetCurrentKey("Document Type", Type, "No.", "Variant Code", "Drop Shipment", "Location Code", "Shipment Date");
+        SalesLine.SetRange("Document Type", SalesLine."Document Type"::"Blanket Order");
+        SalesLine.SetRange(Type, SalesLine.Type::Item);
+        SalesLine.SetRange("No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            SalesLine.SetRange("Variant Code", PassedItem."Variant Filter");
+        SalesLine.SetRange("Drop Shipment", false);
+        if LocationFilter <> '' then
+            SalesLine.SetFilter("Location Code", LocationFilter);
+
+        SalesLine.CalcSums("Outstanding Qty. (Base)");
+
+        SalesLine.SetAutoCalcFields(EVO_EFL_QtyConvToSalesOrdBase);
+        if SalesLine.FindSet() then
+            repeat
+                QtyOnBlanketOrder := QtyOnBlanketOrder - SalesLine."Outstanding Qty. (Base)" + SalesLine.EVO_EFL_QtyConvToSalesOrdBase;
+            until SalesLine.Next() = 0;
+
+
+    end;
+
+    procedure CalcQtyOnInboundTransfer(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(CalcQtyOnInboundTransfer(ItemNo, ''));
+    end;
+
+    procedure CalcQtyOnInboundTransfer(ItemNo: Code[20]; LocationFilter: Text): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(CalcQtyOnInboundTransfer(Item, LocationFilter));
+    end;
+
+    procedure CalcQtyOnInboundTransfer(PassedItem: Record Item; var LocationFilter: Text) QtyOnInboundTransfer: Decimal
+    var
+        TransferLine: Record "Transfer Line";
+    begin
+        Clear(QtyOnInboundTransfer);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        TransferLine.SetRange("Item No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            TransferLine.SetFilter("Variant Code", PassedItem."Variant Filter");
+        if LocationFilter <> '' then
+            TransferLine.SetFilter("Transfer-to Code", LocationFilter);
+
+        TransferLine.CalcSums("Outstanding Qty. (Base)");
+
+        QtyOnInboundTransfer := TransferLine."Outstanding Qty. (Base)";
+
+    end;
+
+    procedure CalcQtyOnOutboundTransfer(PassedItem: Record Item; var LocationFilter: Text) QtyOnOutboundTransfer: Decimal
+    var
+        TransferLine: Record "Transfer Line";
+    begin
+        Clear(QtyOnOutboundTransfer);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        TransferLine.SetRange("Item No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            TransferLine.SetFilter("Variant Code", PassedItem."Variant Filter");
+        if LocationFilter <> '' then
+            TransferLine.SetFilter("Transfer-from Code", LocationFilter);
+
+        TransferLine.CalcSums("Outstanding Qty. (Base)");
+
+        QtyOnOutboundTransfer := TransferLine."Outstanding Qty. (Base)";
+
+    end;
+
+    procedure CalcQtyOnAssemblyConsumption(PassedItem: Record Item; var LocationFilter: Text) AssemblyConsumpQty: Decimal
+    var
+        AssemblyLine: Record "Assembly Line";
+    begin
+        Clear(AssemblyConsumpQty);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        AssemblyLine.SetRange("Document Type", AssemblyLine."Document Type"::Order);
+        AssemblyLine.SetRange(Type, AssemblyLine.Type::Item);
+        AssemblyLine.SetRange("No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            AssemblyLine.SetFilter("Variant Code", PassedItem."Variant Filter");
+        AssemblyLine.SetFilter("Remaining Quantity", '>0');
+        if LocationFilter <> '' then
+            AssemblyLine.SetFilter("Location Code", LocationFilter);
+
+        AssemblyLine.CalcSums("Quantity (Base)", "Remaining Quantity (Base)", "Qty. Picked (Base)");
+        AssemblyConsumpQty += AssemblyLine."Quantity (Base)" - AssemblyLine."Qty. Picked (Base)";
+
+    end;
+
+    procedure CalcQtyOnProdConsumption(PassedItem: Record Item; var LocationFilter: Text) ProdConsumpQty: Decimal
+    var
+        ProdOrderComponent: Record "Prod. Order Component";
+    begin
+        Clear(ProdConsumpQty);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        ProdOrderComponent.SetRange(Status, ProdOrderComponent.Status::"Firm Planned", ProdOrderComponent.Status::Released);
+        ProdOrderComponent.SetRange("Item No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            ProdOrderComponent.SetRange("Variant Code", PassedItem."Variant Filter");
+        if LocationFilter <> '' then
+            ProdOrderComponent.SetFilter("Location Code", LocationFilter);
+
+        ProdOrderComponent.CalcSums("Remaining Qty. (Base)");
+
+        ProdConsumpQty += ProdOrderComponent."Remaining Qty. (Base)";
+
+    end;
+
+    procedure CalcQtyOnPurchaseReturn(PassedItem: Record Item; var LocationFilter: Text) PurchaseReturnQty: Decimal
+    var
+        PurchaseLine: Record "Purchase Line";
+    begin
+        Clear(PurchaseReturnQty);
+        if LocationFilter = '' then
+            BuildMainLocationFilter(LocationFilter);
+
+        PurchaseLine.SetRange("Document Type", PurchaseLine."Document Type"::"Return Order");
+        PurchaseLine.SetRange(Type, PurchaseLine.Type::Item);
+        PurchaseLine.SetRange("No.", PassedItem."No.");
+        if PassedItem."Variant Filter" <> '' then
+            PurchaseLine.SetFilter("Variant Code", PassedItem."Variant Filter");
+        PurchaseLine.SetRange("Drop Shipment", false);
+        if LocationFilter <> '' then
+            PurchaseLine.SetFilter("Location Code", LocationFilter);
+
+        PurchaseLine.CalcSums("Outstanding Qty. (Base)");
+        PurchaseReturnQty := PurchaseLine."Outstanding Qty. (Base)";
+
+    end;
+
+    local procedure CreateDarAvailabilityEntry(var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry;
+            var
+                InventoryEventBuffer: Record "Inventory Event Buffer";
+                AvailType: Enum EVS_EIF_AvailType;
+                SupplyDemandCaption: Text;
+                TableId: Integer;
+                FilterText: Text;
+                IncludeInPhysStockCalc: Boolean;
+                IncludeInGoodQuarCalc: Boolean;
+                IncludeInQuarCalc: Boolean;
+                IncludeInAvailableNowCalc: Boolean;
+                IncludeInTotalAvailableCalc: Boolean;
+                IncludeInReservedQtyCalc: Boolean;
+                DocumentType: Integer;
+                DocumentNo: Code[20];
+                DocumentLineNo: Integer)
+    var
+        NewEntryNo: Integer;
+        NegativeInventoryWarningTxt: Label 'WARNING: NEGATIVE INVENTORY';
+    begin
+        // if InventoryEventBuffer."Remaining Quantity (Base)" = 0 then
+        // exit;
+
+        if InventoryEventBuffer.EVS_EIF_TableID <> 0 then
+            TableId := InventoryEventBuffer.EVS_EIF_TableID;
+
+        EVSEIFInventoryAvailEntry.Reset();
+        EVSEIFInventoryAvailEntry.SetCurrentKey(EVS_EIF_TableID, EVS_EIF_EntryNo);
+        EVSEIFInventoryAvailEntry.SetRange(EVS_EIF_TableID, TableId);
+        if EVSEIFInventoryAvailEntry.FindLast() then
+            NewEntryNo := EVSEIFInventoryAvailEntry.EVS_EIF_EntryNo + 1
+        else
+            NewEntryNo := 1;
+
+        EVSEIFInventoryAvailEntry.Init();
+        EVSEIFInventoryAvailEntry.EVS_EIF_TableID := TableId;
+        EVSEIFInventoryAvailEntry.EVS_EIF_EntryNo := NewEntryNo;
+        EVSEIFInventoryAvailEntry.EVS_EIF_Type := AvailType;
+        EVSEIFInventoryAvailEntry.EVS_EIF_TypeNo := AvailType.AsInteger();
+        EVSEIFInventoryAvailEntry.EVS_EIF_DocumentType := DocumentType;
+        EVSEIFInventoryAvailEntry.EVS_EIF_DocumentNo := DocumentNo;
+        EVSEIFInventoryAvailEntry.EVS_EIF_DocumentLineNo := DocumentLineNo;
+
+        // Deal with negative inventory
+        if (EVSEIFInventoryAvailEntry.EVS_EIF_Type = EVSEIFInventoryAvailEntry.EVS_EIF_Type::Inventory) and (InventoryEventBuffer."Remaining Quantity (Base)" < 0) then begin
+            EVSEIFInventoryAvailEntry.EVS_EIF_EntryType := EVSEIFInventoryAvailEntry.EVS_EIF_EntryType::Supply;
+            EVSEIFInventoryAvailEntry.EVS_EIF_Description := NegativeInventoryWarningTxt;
+        end else begin
+            if InventoryEventBuffer."Remaining Quantity (Base)" < 0 then
+                EVSEIFInventoryAvailEntry.EVS_EIF_EntryType := EVSEIFInventoryAvailEntry.EVS_EIF_EntryType::Demand
+            else
+                EVSEIFInventoryAvailEntry.EVS_EIF_EntryType := EVSEIFInventoryAvailEntry.EVS_EIF_EntryType::Supply;
+            EVSEIFInventoryAvailEntry.EVS_EIF_Description := CopyStr(SupplyDemandCaption, 1, MaxStrLen(EVSEIFInventoryAvailEntry.EVS_EIF_Description));
+        end;
+
+        if InventoryEventBuffer.EVS_EIF_Description <> '' then
+            EVSEIFInventoryAvailEntry.EVS_EIF_Description := InventoryEventBuffer.EVS_EIF_Description;
+
+        EVSEIFInventoryAvailEntry.EVS_EIF_LocationCode := InventoryEventBuffer."Location Code";
+        EVSEIFInventoryAvailEntry.EVS_EIF_QuantityBase := InventoryEventBuffer."Remaining Quantity (Base)";
+        EVSEIFInventoryAvailEntry.EVS_EIF_AvailabilityDate := InventoryEventBuffer."Availability Date";
+
+        // set calculation flags
+        if InventoryEventBuffer.EVS_EIF_Override then begin
+            EVSEIFInventoryAvailEntry.DAR_COR_PhysicalStockFlag := InventoryEventBuffer.DAR_COR_PhysicalStockFlag;
+            EVSEIFInventoryAvailEntry.DAR_COR_GoodQuarantineFlag := InventoryEventBuffer.DAR_COR_GoodQuarantineFlag;
+            EVSEIFInventoryAvailEntry.DAR_COR_QuarantineFlag := InventoryEventBuffer.DAR_COR_QuarantineFlag;
+            EVSEIFInventoryAvailEntry.DAR_COR_AvailableNowFlag := InventoryEventBuffer.DAR_COR_AvailableNowFlag;
+            EVSEIFInventoryAvailEntry.DAR_COR_TotalAvailableFlag := InventoryEventBuffer.DAR_COR_TotalAvailableFlag;
+            EVSEIFInventoryAvailEntry.DAR_COR_ReservedQtyFlag := InventoryEventBuffer.DAR_COR_ReservedQtyFlag;
+        end else begin
+            EVSEIFInventoryAvailEntry.DAR_COR_PhysicalStockFlag := IncludeInPhysStockCalc;
+            EVSEIFInventoryAvailEntry.DAR_COR_GoodQuarantineFlag := IncludeInGoodQuarCalc;
+            EVSEIFInventoryAvailEntry.DAR_COR_QuarantineFlag := IncludeInQuarCalc;
+            EVSEIFInventoryAvailEntry.DAR_COR_AvailableNowFlag := IncludeInAvailableNowCalc;
+            EVSEIFInventoryAvailEntry.DAR_COR_TotalAvailableFlag := IncludeInTotalAvailableCalc;
+            EVSEIFInventoryAvailEntry.DAR_COR_ReservedQtyFlag := IncludeInReservedQtyCalc;
+        end;
+
+        if InventoryEventBuffer.EVS_EIF_TableView <> '' then
+            EVSEIFInventoryAvailEntry.SaveFilterText(InventoryEventBuffer.EVS_EIF_TableView)
+        else
+            EVSEIFInventoryAvailEntry.SaveFilterText(FilterText);
+        EVSEIFInventoryAvailEntry.Insert(true);
+        EVSEIFInventoryAvailEntry.Reset();
+    end;
+
+    procedure GetGoodQuarantineBinContents(ItemNo: Code[20]; VariantCode: Code[10]; LocationCode: Code[10]; var BinContent: Record "Bin Content"): Decimal
+    var
+        GoodQuarantine: Decimal;
+    begin
+        //Good Quarantine = Bin Contents with Blocked Reason Code and Show Available = true
+        Clear(GoodQuarantine);
+        BinContent.Reset();
+        if LocationCode <> '' then
+            BinContent.SetRange("Location Code", LocationCode);
+        if ItemNo <> '' then
+            BinContent.SetRange("Item No.", ItemNo);
+        if VariantCode <> '' then
+            BinContent.SetRange("Variant Code", VariantCode);
+        BinContent.SetFilter(EVS_EIF_BlockedReasonCode, '<>%1', '');
+        BinContent.SetRange(DAR_QUA_ShowAvailable, true);
+        if BinContent.FindSet() then
+            repeat
+                BinContent.CalcFields("Quantity (Base)");
+                GoodQuarantine += BinContent."Quantity (Base)";
+            until BinContent.Next() = 0;
+        exit(GoodQuarantine);
+    end;
+
+    procedure GetQAQuarantineBinContents(ItemNo: Code[20]; VariantCode: Code[10]; LocationCode: Code[10]; var BinContent: Record "Bin Content"): Decimal
+    var
+        Quarantine: Decimal;
+    begin
+        //Good Quarantine = Bin Contents with Blocked Reason Code and Show Available = true
+        Clear(Quarantine);
+        BinContent.Reset();
+        if LocationCode <> '' then
+            BinContent.SetRange("Location Code", LocationCode);
+        if ItemNo <> '' then
+            BinContent.SetRange("Item No.", ItemNo);
+        if VariantCode <> '' then
+            BinContent.SetRange("Variant Code", VariantCode);
+        BinContent.SetFilter(EVS_EIF_BlockedReasonCode, '<>%1', '');
+        BinContent.SetRange(DAR_QUA_ShowAvailable, false);
+        if BinContent.FindSet() then
+            repeat
+                BinContent.CalcFields("Quantity (Base)");
+                Quarantine += BinContent."Quantity (Base)";
+            until BinContent.Next() = 0;
+        exit(Quarantine);
+    end;
+
+    procedure BuildConsignLocationFilter(var PassedConsignLocFilter: Text)
+    var
+        Location: Record Location;
+        SelectionFilterManagement: Codeunit SelectionFilterManagement;
+    begin
+        Clear(PassedConsignLocFilter);
+        Location.SetFilter(DAR_COR_LocationType, '%1|%2', Location.DAR_COR_LocationType::DAR_COR_Consignment, Location.DAR_COR_LocationType::DAR_COR_Returns);
+        if Location.FindSet() then begin
+            repeat
+                Location.Mark(true);
+            until Location.Next() = 0;
+            Location.MarkedOnly(true);
+        end;
+
+        PassedConsignLocFilter := SelectionFilterManagement.GetSelectionFilterForLocation(Location);
+    end;
+
+    procedure BuildMainLocationFilter(var PassedMainLocFilter: Text)
+    var
+        Location: Record Location;
+        SelectionFilterManagement: Codeunit SelectionFilterManagement;
+    begin
+        Clear(PassedMainLocFilter);
+        Location.SetFilter(DAR_COR_LocationType, '%1', Location.DAR_COR_LocationType::DAR_COR_Main);
+        if Location.FindSet() then begin
+            repeat
+                Location.Mark(true);
+            until Location.Next() = 0;
+            Location.MarkedOnly(true);
+        end;
+
+        PassedMainLocFilter := SelectionFilterManagement.GetSelectionFilterForLocation(Location);
+    end;
+
+    procedure BuildExclusionLocationFilter(var PassedExclusionLocFilter: Text)
+    var
+        Location: Record Location;
+        SelectionFilterManagement: Codeunit SelectionFilterManagement;
+    begin
+        Clear(PassedExclusionLocFilter);
+        Location.SetFilter(DAR_COR_LocationType, '<>%1', Location.DAR_COR_LocationType::DAR_COR_Main);
+        if Location.FindSet() then begin
+            repeat
+                Location.Mark(true);
+            until Location.Next() = 0;
+            Location.MarkedOnly(true);
+        end;
+
+        PassedExclusionLocFilter := SelectionFilterManagement.GetSelectionFilterForLocation(Location);
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::EVS_EIF_AvailabilityManagement, ShowAvailabilityEntriesOnAfterSetFilter, '', false, false)]
+    local procedure ShowAvailabilityEntriesOnAfterSetFilter(var TempEVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry temporary; var EVSEIFInvtAvailFilterParam: Record EVS_EIF_InvtAvailFilterParam)
+    begin
+        if EVSEIFInvtAvailFilterParam.DAR_COR_PhysicalStock then
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_PhysicalStockFlag, EVSEIFInvtAvailFilterParam.DAR_COR_PhysicalStock);
+        if EVSEIFInvtAvailFilterParam.DAR_COR_GoodQuarantine then
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_GoodQuarantineFlag, EVSEIFInvtAvailFilterParam.DAR_COR_GoodQuarantine);
+        if EVSEIFInvtAvailFilterParam.DAR_COR_Quarantine then
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_QuarantineFlag, EVSEIFInvtAvailFilterParam.DAR_COR_Quarantine);
+        if EVSEIFInvtAvailFilterParam.DAR_COR_TotalAvailable then
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_TotalAvailableFlag, EVSEIFInvtAvailFilterParam.DAR_COR_TotalAvailable);
+        if EVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow then
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_AvailableNowFlag, EVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow);
+        if EVSEIFInvtAvailFilterParam.DAR_COR_Reserved then
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_ReservedQtyFlag, EVSEIFInvtAvailFilterParam.DAR_COR_Reserved);
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::EVS_EIF_AvailabilityManagement, OnAfterCreateInventoryAvailabilityEntries, '', false, false)]
+    local procedure OnAfterCreateInventoryAvailabilityEntries(var Item: Record Item; var InventoryEventBuffer: Record "Inventory Event Buffer"; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry)
+    begin
+        CalculateDarPhysicalStock(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateQtyInConsign(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateQAQuarantine(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateGoodQuarantine(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateQtyOnSalesDueToday(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateQtyOnSalesDueFuture(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateWhseShptLinesToConsignment(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateWhseShptLinesForSales(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateTransferToConsign(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateTransferToConsignDueFuture(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateAssembledQtyThatCanBeMade(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateBlanketOrdersDueToday(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateBlanketOrdersDueFuture(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateAssemblyComponentDemand(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateSalesLineQtyReservedAgainstPurchase(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateConsignQtyReservedAgainstPurchase(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateReservedDemandNotOnWhseShpt(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        CalculateReservedOnBlanketOrder(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+        //TODO:Possibly need to remove reservations to assembly orders.
+        CalculateReservedOnAssemblyOrders(Item, InventoryEventBuffer, EVSEIFInventoryAvailEntry);
+
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::EVS_EIF_AvailabilityManagement, OnAfterCalculateKeepRecord, '', false, false)]
+    local procedure OnAfterCalculateKeepRecord(var EVSEIFInvtAvailFilterParam: Record EVS_EIF_InvtAvailFilterParam; var EVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry; var KeepRecord: Boolean)
+    begin
+        KeepRecord := (EVSEIFInventoryAvailEntry.EVS_EIF_InventoryFlag and EVSEIFInvtAvailFilterParam.EVS_EIF_InventoryFilter) or
+                    (EVSEIFInventoryAvailEntry.EVS_EIF_UsableFlag and EVSEIFInvtAvailFilterParam.EVS_EIF_UsableFilter) or
+                    (EVSEIFInventoryAvailEntry.EVS_EIF_AvailableFlag and EVSEIFInvtAvailFilterParam.EVS_EIF_AvailableFilter) or
+                    (EVSEIFInventoryAvailEntry.EVS_EIF_FreeFlag and EVSEIFInvtAvailFilterParam.EVS_EIF_FreeFilter) or
+                    (EVSEIFInventoryAvailEntry.EVS_EIF_ForwardFreeFlag and EVSEIFInvtAvailFilterParam.EVS_EIF_ForwardFreeFilter) or
+                    (EVSEIFInventoryAvailEntry.DAR_COR_PhysicalStockFlag and EVSEIFInvtAvailFilterParam.DAR_COR_PhysicalStock) or
+                    (EVSEIFInventoryAvailEntry.DAR_COR_GoodQuarantineFlag and EVSEIFInvtAvailFilterParam.DAR_COR_GoodQuarantine) or
+                    (EVSEIFInventoryAvailEntry.DAR_COR_QuarantineFlag and EVSEIFInvtAvailFilterParam.DAR_COR_Quarantine) or
+                    (EVSEIFInventoryAvailEntry.DAR_COR_AvailableNowFlag and EVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow) or
+                    (EVSEIFInventoryAvailEntry.DAR_COR_TotalAvailableFlag and EVSEIFInvtAvailFilterParam.DAR_COR_TotalAvailable) or
+                    (EVSEIFInventoryAvailEntry.DAR_COR_ReservedQtyFlag and EVSEIFInvtAvailFilterParam.DAR_COR_Reserved);
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::EVS_EIF_AvailabilityManagement, OnAfterCalculateInventoryAvailability, '', false, false)]
+    local procedure OnAfterCalculateInventoryAvailability(var Item: Record Item; var EVSEIFInvtAvailFilterParam: Record EVS_EIF_InvtAvailFilterParam temporary; var TempEVSEIFInventoryAvailEntry: Record EVS_EIF_InventoryAvailEntry temporary)
+    begin
+
+        if EVSEIFInvtAvailFilterParam.DAR_COR_GoodQuarantine then begin
+            TempEVSEIFInventoryAvailEntry.Reset();
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_GoodQuarantineFlag, true);
+            TempEVSEIFInventoryAvailEntry.CalcSums(EVS_EIF_QuantityBase);
+            EVSEIFInvtAvailFilterParam.DAR_COR_GoodQuarantineQty := TempEVSEIFInventoryAvailEntry.EVS_EIF_QuantityBase;
+        end;
+
+        if EVSEIFInvtAvailFilterParam.DAR_COR_PhysicalStock then begin
+            TempEVSEIFInventoryAvailEntry.Reset();
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_PhysicalStockFlag, true);
+            TempEVSEIFInventoryAvailEntry.CalcSums(EVS_EIF_QuantityBase);
+            EVSEIFInvtAvailFilterParam.DAR_COR_PhysicalStockQty := TempEVSEIFInventoryAvailEntry.EVS_EIF_QuantityBase;
+        end;
+
+        if EVSEIFInvtAvailFilterParam.DAR_COR_Quarantine then begin
+            TempEVSEIFInventoryAvailEntry.Reset();
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_QuarantineFlag, true);
+            TempEVSEIFInventoryAvailEntry.CalcSums(EVS_EIF_QuantityBase);
+            EVSEIFInvtAvailFilterParam.DAR_COR_QuarantineQty := TempEVSEIFInventoryAvailEntry.EVS_EIF_QuantityBase;
+        end;
+
+        if EVSEIFInvtAvailFilterParam.DAR_COR_AvailableNow then begin
+            TempEVSEIFInventoryAvailEntry.Reset();
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_AvailableNowFlag, true);
+            TempEVSEIFInventoryAvailEntry.CalcSums(EVS_EIF_QuantityBase);
+            EVSEIFInvtAvailFilterParam.DAR_COR_AvailableNowQty := TempEVSEIFInventoryAvailEntry.EVS_EIF_QuantityBase;
+        end;
+
+        if EVSEIFInvtAvailFilterParam.DAR_COR_TotalAvailable then begin
+            TempEVSEIFInventoryAvailEntry.Reset();
+            TempEVSEIFInventoryAvailEntry.SetRange(DAR_COR_TotalAvailableFlag, true);
+            TempEVSEIFInventoryAvailEntry.CalcSums(EVS_EIF_QuantityBase);
+            EVSEIFInvtAvailFilterParam.DAR_COR_TotalAvailableQty := TempEVSEIFInventoryAvailEntry.EVS_EIF_QuantityBase;
+        end;
+    end;
+
+    var
+        AvailabilityType: Enum EVS_EIF_AvailType;
+}
