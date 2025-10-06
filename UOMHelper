@@ -1,0 +1,331 @@
+codeunit 71119601 EVS_EIF_UOMHelper
+{
+    procedure RollUpUnitOfMeasureWeightsAndVolumes(ItemNo: Code[20])
+    var
+        Item: Record Item;
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        Item.Get(ItemNo);
+        Item.CalcFields("Assembly BOM");
+        ItemUnitofMeasure.Get(Item."No.", Item."Base Unit of Measure");
+
+        if Item."Assembly BOM" then
+            RollUpWeightsAndVolumesForAssembledItem(Item, ItemUnitofMeasure);
+    end;
+
+    local procedure RollUpWeightsAndVolumesForAssembledItem(var Item: Record Item; var ItemUnitOfMeasure: Record "Item Unit of Measure")
+    var
+        BOMComponent: Record "BOM Component";
+        IsHandled: Boolean;
+    begin
+        ItemUnitOfMeasure.Cubage := 0;
+        ItemUnitOfMeasure.Weight := 0;
+        ItemUnitOfMeasure.EVS_EIF_GrossWeight := 0;
+
+        OnBeforeRollUpWeightsAndVolumesForAssembledItem(Item, ItemUnitOfMeasure, IsHandled);
+        if not IsHandled then begin
+            BOMComponent.SetRange("Parent Item No.", Item."No.");
+            if BOMComponent.FindSet() then
+                repeat
+                    ItemUnitOfMeasure.Cubage := ItemUnitOfMeasure.Cubage + (BOMComponent.EVS_EIF_Cubage * BOMComponent."Quantity per");
+                    ItemUnitOfMeasure.Weight := ItemUnitOfMeasure.Weight + (BOMComponent.EVS_EIF_Weight * BOMComponent."Quantity per");
+                    ItemUnitOfMeasure.EVS_EIF_GrossWeight := ItemUnitOfMeasure.EVS_EIF_GrossWeight + (BOMComponent.EVS_EIF_GrossWeight * BOMComponent."Quantity per");
+                until BOMComponent.Next() = 0;
+            ItemUnitOfMeasure.Modify();
+            ItemUnitOfMeasure.EVS_EIF_UpdateRelatedUnitsOfMeasure();
+        end;
+        OnAfterRollUpWeightsAndVolumesForAssembledItem(Item, ItemUnitOfMeasure);
+    end;
+
+    procedure GetItemPieceUnitOfMeasure(ItemNo: Code[20]): Record "Item Unit of Measure"
+    begin
+        exit(GetItemUnitOfMeasure(ItemNo, Enum::EVS_EIF_UnitOfMeasureType::Piece));
+    end;
+
+    procedure GetItemOuterUnitOfMeasure(ItemNo: Code[20]): Record "Item Unit of Measure"
+    begin
+        exit(GetItemUnitOfMeasure(ItemNo, Enum::EVS_EIF_UnitOfMeasureType::OuterCarton));
+    end;
+
+    procedure GetItemInnerUnitOfMeasure(ItemNo: Code[20]): Record "Item Unit of Measure"
+    begin
+        exit(GetItemUnitOfMeasure(ItemNo, Enum::EVS_EIF_UnitOfMeasureType::InnerCarton));
+    end;
+
+    procedure GetItemPalletUnitOfMeasure(ItemNo: Code[20]): Record "Item Unit of Measure"
+    begin
+        exit(GetItemUnitOfMeasure(ItemNo, Enum::EVS_EIF_UnitOfMeasureType::Pallet));
+    end;
+
+    local procedure GetItemUnitOfMeasure(ItemNo: Code[20]; UnitOfMeasureType: Enum EVS_EIF_UnitOfMeasureType): Record "Item Unit of Measure"
+    var
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitOfMeasure.SetRange("Item No.", ItemNo);
+        ItemUnitOfMeasure.SetRange(EVS_EIF_UnitOfMeasureType, UnitOfMeasureType);
+        if not ItemUnitOfMeasure.FindFirst() then begin
+            Clear(ItemUnitOfMeasure);
+            ItemUnitOfMeasure."Qty. per Unit of Measure" := 1;   // This is to avoid when an item uom cannot be found
+        end;
+        exit(ItemUnitOfMeasure);
+    end;
+
+    // Get UOM Quantity - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMQuantityPerUnitofMeasure(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMQuantityPerUnitofMeasure(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMQuantityPerUnitofMeasure(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure."Qty. per Unit of Measure");
+    end;
+
+    // Get UOM Net Weight - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMNetWeight(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMNetWeight(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMNetWeight(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure.Weight);
+    end;
+
+    // Get UOM Gross Weight - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMGrossWeight(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMGrossWeight(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMGrossWeight(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure.EVS_EIF_GrossWeight);
+    end;
+
+    // Get UOM Cubage - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMCubage(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMCubage(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMCubage(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure.Cubage);
+    end;
+
+    // Get UOM Dimensions - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMDimensions(ItemNo: Code[20]; var Height: Decimal; var Width: Decimal; var Length: Decimal)
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        GetItemUOMDimensions(Item."No.", Item."Base Unit of Measure", Height, Width, Length);
+    end;
+
+    procedure GetItemUOMDimensions(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]; var Height: Decimal; var Width: Decimal; var Length: Decimal)
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+
+        Height := ItemUnitofMeasure.Height;
+        Width := ItemUnitofMeasure.Width;
+        Length := ItemUnitofMeasure.Length;
+    end;
+
+    // Get UOM Height - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMHeight(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMHeight(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMHeight(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure.Height);
+    end;
+
+    // Get UOM Width - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMWidth(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMWidth(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMWidth(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure.Width);
+    end;
+
+    // Get UOM Length - Overloaded function
+    // Pass ItemNo then it returns the quantity per unit of measure for the base unit of measure, which in theory is always 1
+    // Pass ItemNo & Unit of Measure code it returns the quantity per unit of measure in the UOM requested
+    procedure GetItemUOMLength(ItemNo: Code[20]): Decimal
+    var
+        Item: Record Item;
+    begin
+        Item.Get(ItemNo);
+        exit(GetItemUOMLength(Item."No.", Item."Base Unit of Measure"));
+    end;
+
+    procedure GetItemUOMLength(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Decimal
+    var
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitofMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Clear(ItemUnitofMeasure);
+        exit(ItemUnitofMeasure.Length);
+    end;
+
+
+    procedure CalcNoOuters(ItemNo: Code[20]; QuantityBase: Decimal): Decimal
+    var
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitOfMeasure := GetItemOuterUnitOfMeasure(ItemNo);
+        if ItemUnitOfMeasure."Qty. per Unit of Measure" <> 0 then
+            exit(QuantityBase / ItemUnitOfMeasure."Qty. per Unit of Measure")
+        else
+            exit(0);
+    end;
+
+    procedure CalcNoInners(ItemNo: Code[20]; QuantityBase: Decimal): Decimal
+    var
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitOfMeasure := GetItemInnerUnitOfMeasure(ItemNo);
+        if ItemUnitOfMeasure."Qty. per Unit of Measure" <> 0 then
+            exit(QuantityBase / ItemUnitOfMeasure."Qty. per Unit of Measure")
+        else
+            exit(0);
+    end;
+
+    procedure CalcNoPallets(ItemNo: Code[20]; QuantityBase: Decimal): Decimal
+    var
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitOfMeasure := GetItemPalletUnitOfMeasure(ItemNo);
+        if ItemUnitOfMeasure."Qty. per Unit of Measure" <> 0 then
+            exit(QuantityBase / ItemUnitOfMeasure."Qty. per Unit of Measure")
+        else
+            exit(0);
+    end;
+
+    procedure ConvertVolumeToImperial(VolumeInMetric: Decimal): Decimal
+    begin
+        exit(RoundVolume(VolumeInMetric * 35.3147));
+    end;
+
+    procedure ConvertVolumeToMetric(VolumeInImperial: Decimal): Decimal
+    begin
+        exit(RoundVolume(VolumeInImperial / 35.3147));
+    end;
+
+    procedure ConvertWeightToImperial(WeightInMetric: Decimal): Decimal
+    begin
+        exit(RoundWeight(WeightInMetric * 2.20462));
+    end;
+
+    procedure ConvertWeightToMetric(WeightInImperial: Decimal): Decimal
+    begin
+        exit(RoundWeight(WeightInImperial / 2.20462));
+    end;
+
+    procedure RoundVolume(Volume: Decimal): Decimal
+    var
+        CubageRoundingSetupErr: Label 'The %1 field in the %2 table must be entered. Search for evo-supply inventory setup on the role centre to find the appropriate page.', Comment = '%1 - Field Name, %2 - Table Name';
+    begin
+        GetEvosupplyInventorySetup();
+        if EVSEIFInventorySetup.EVS_EIF_CubageRoundingP = 0 then
+            Error(CubageRoundingSetupErr, EVSEIFInventorySetup.FieldCaption(EVS_EIF_CubageRoundingP), EVSEIFInventorySetup.TableCaption);
+        exit(Round(Volume, EVSEIFInventorySetup.EVS_EIF_CubageRoundingP));
+    end;
+
+    procedure RoundWeight(Weight: Decimal): Decimal
+    var
+        WeightRoundingSetupErr: Label 'The %1 field in the %2 table must be entered. Search for evo-supply inventory setup on the role centre to find the appropriate page.', Comment = '%1 - Cubage Rounding Field Caption, %2 - Inventory Setup Table Caption';
+    begin
+        GetEvosupplyInventorySetup();
+        if EVSEIFInventorySetup.EVS_EIF_CubageRoundingP = 0 then
+            Error(WeightRoundingSetupErr, EVSEIFInventorySetup.FieldCaption(EVS_EIF_CubageRoundingP), EVSEIFInventorySetup.TableCaption);
+        exit(Round(Weight, EVSEIFInventorySetup.EVS_EIF_WeightRoundingP));
+    end;
+
+    local procedure GetEvosupplyInventorySetup()
+    begin
+        if not InventorySetupRead then begin
+            EVSEIFInventorySetup.Get();
+            InventorySetupRead := true;
+        end;
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeRollUpWeightsAndVolumesForAssembledItem(var Item: Record Item; var ItemUnitofMeasure: Record "Item Unit of Measure"; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterRollUpWeightsAndVolumesForAssembledItem(var Item: Record Item; var ItemUnitofMeasure: Record "Item Unit of Measure")
+    begin
+    end;
+
+    var
+        EVSEIFInventorySetup: Record EVS_EIF_InventorySetup;
+        InventorySetupRead: Boolean;
+}
