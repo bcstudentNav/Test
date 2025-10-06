@@ -1,0 +1,233 @@
+codeunit 71129578 EVO_EFL_TextHelper
+{
+    procedure RemoveControlCharacters(Text: Text) TextOut: Text
+    var
+        Loop: Integer;
+    begin
+        for Loop := 1 to StrLen(Text) do
+            if (Text[Loop] >= 32) and (Text[Loop] <= 126) then
+                TextOut := TextOut + CopyStr(Text, Loop, 1);
+    end;
+
+    procedure Date2YYDDD(DateIn: Date) YYDDD: Code[5]
+    var
+        Year: Integer;
+        Day: Integer;
+    begin
+        Year := Date2DMY(DateIn, 3);
+        Day := DateIn - CalcDate('<-CY>', DateIn) + 1;
+        YYDDD := CopyStr(Format(Year), 3, 2);
+        YYDDD := YYDDD + Format(Day, 3);
+        YYDDD := ConvertStr(YYDDD, ' ', '0');
+    end;
+
+    procedure SplitText(TextToSplit: Text; LineLength: Integer; var SplitTexts: array[999] of Text)
+    var
+        StringConversionManagement: Codeunit StringConversionManagement;
+        LineCount: Integer;
+        CurrPos: Integer;
+        Cut: Integer;
+        CHAR13: Char;
+    begin
+        TextToSplit := StringConversionManagement.WindowsToASCII(TextToSplit);
+        CurrPos := 1;
+        LineCount := 1;
+        CHAR13 := 13;
+        Clear(SplitTexts);
+        while CurrPos + LineLength < StrLen(TextToSplit) do begin
+            Cut := StrPos(CopyStr(TextToSplit, CurrPos, LineLength + 1), Format(CHAR13));
+            if Cut = 0 then
+                Cut := GetSplitPos(CopyStr(TextToSplit, CurrPos, LineLength + 1));
+            if Cut = -1 then begin
+                SplitTexts[LineCount] := CopyStr(TextToSplit, CurrPos, LineLength);
+                CurrPos += LineLength;
+            end else begin
+                SplitTexts[LineCount] := CopyStr(TextToSplit, CurrPos, Cut);
+                CurrPos += Cut;
+            end;
+            LineCount += 1;
+        end;
+        if CurrPos < StrLen(TextToSplit) then
+            SplitTexts[LineCount] := CopyStr(TextToSplit, CurrPos, LineLength); //rest of the string
+    end;
+
+    local procedure GetSplitPos(TextIn: Text): Integer
+    var
+        tempChar: Char;
+        i: Integer;
+    begin
+        for i := 1 to StrLen(TextIn) do begin
+            tempChar := TextIn[StrLen(TextIn) + 1 - i];
+
+            if (tempChar < 65) or ((tempChar > 90) and (tempChar < 97)) or (tempChar > 122) then
+                exit(StrLen(TextIn) - i + 1);
+        end;
+
+        exit(-1);
+    end;
+
+    procedure NormalCase(var TextToConvert: Text)
+    var
+        Loop: Integer;
+        CapReq: Boolean;
+    begin
+        CapReq := true;
+        TextToConvert := TextToConvert;                               // bypass warning on AL compiler that says field is not used.
+        for Loop := 1 to StrLen(TextToConvert) do begin
+            if TextToConvert[Loop] in [65 .. 90, 97 .. 122] then
+                if CapReq then begin
+                    Evaluate(TextToConvert[Loop], UpperCase(Format(TextToConvert[Loop])));
+                    CapReq := false;
+                end else
+                    Evaluate(TextToConvert[Loop], LowerCase(Format(TextToConvert[Loop])));
+
+            if TextToConvert[Loop] in [46, 63, 33] then
+                CapReq := true;
+        end;
+    end;
+
+    procedure Ascii2Ansi(TextToConvert: Text): Text
+
+    begin
+        exit(Ascii2AnsiConverter(TextToConvert, true));
+    end;
+
+    procedure Ansi2Ascii(TextToConvert: Text): Text
+    var
+    begin
+        exit(Ascii2AnsiConverter(TextToConvert, false));
+    end;
+
+    local procedure Ascii2AnsiConverter(TextToConvert: Text; ConvertAscii2Ansi: Boolean): Text
+    var
+        AsciiStr: Text;
+        AnsiStr: Text;
+        CharVar: array[32] of Char;
+    begin
+        AsciiStr := 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥ƒáíóúñÑªº¿¬½¼¡«»¦¦¦¦¦…†‡ˆ¦¦++Ž++--+-+–—++--¦-+';
+        AsciiStr := AsciiStr + 'Ÿ¨©­®¯i´¸¹++¦_¦ÃØÊßËÌÍÎµÏÐÒÓÔÕ×ØÙÚ±=ÝÞã÷ð°õ·øý²¦ ';
+        CharVar[1] := 196;
+        CharVar[2] := 197;
+        CharVar[3] := 201;
+        CharVar[4] := 242;
+        CharVar[5] := 220;
+        CharVar[6] := 186;
+        CharVar[7] := 191;
+        CharVar[8] := 188;
+        CharVar[9] := 187;
+        CharVar[10] := 193;
+        CharVar[11] := 194;
+        CharVar[12] := 192;
+        CharVar[13] := 195;
+        CharVar[14] := 202;
+        CharVar[15] := 203;
+        CharVar[16] := 200;
+        CharVar[17] := 205;
+        CharVar[18] := 206;
+        CharVar[19] := 204;
+        CharVar[20] := 175;
+        CharVar[21] := 223;
+        CharVar[22] := 213;
+        CharVar[23] := 254;
+        CharVar[24] := 218;
+        CharVar[25] := 219;
+        CharVar[26] := 217;
+        CharVar[27] := 180;
+        CharVar[28] := 177;
+        CharVar[29] := 176;
+        CharVar[30] := 185;
+        CharVar[31] := 179;
+        CharVar[32] := 178;
+        AnsiStr := '—ýÒËÍÊÎÏÓÔÐÙØÕ' + Format(CharVar[1]) + Format(CharVar[2]) + Format(CharVar[3]) + 'µ–Þ÷' + Format(CharVar[4]);
+        AnsiStr += 'øõ ´' + Format(CharVar[5]) + '°ú¹¸âß×Ý·±©¬' + Format(CharVar[6]) + Format(CharVar[7]);
+        AnsiStr += '«¼' + Format(CharVar[8]) + 'í½' + Format(CharVar[9]) + '___ªª' + Format(CharVar[10]) + Format(CharVar[11]);
+        AnsiStr += Format(CharVar[12]) + 'ªª++óÑ++--+-+Ì' + Format(CharVar[13]) + '++--ª-+ñÚ¨';
+        AnsiStr += Format(CharVar[14]) + Format(CharVar[15]) + Format(CharVar[16]) + 'i' + Format(CharVar[17]) + Format(CharVar[18]);
+        AnsiStr += 'Ÿ++__ª' + Format(CharVar[19]) + Format(CharVar[20]) + '®' + Format(CharVar[21]) + '¯­ã';
+        AnsiStr += Format(CharVar[22]) + '…' + Format(CharVar[23]) + 'Ã' + Format(CharVar[24]) + Format(CharVar[25]);
+        AnsiStr += Format(CharVar[26]) + '²¦»' + Format(CharVar[27]) + '¡' + Format(CharVar[28]) + '=Ž†ºðˆ' + Format(CharVar[29]);
+        AnsiStr += '¿‡' + Format(CharVar[30]) + Format(CharVar[31]) + Format(CharVar[32]) + '_ ';
+
+        if ConvertAscii2Ansi then
+            exit(ConvertStr(TextToConvert, AsciiStr, AnsiStr))
+        else
+            exit(ConvertStr(TextToConvert, AnsiStr, AsciiStr));
+    end;
+
+    procedure ConvertTextToVariantType(var ToVariant: Variant; InputText: Text): Boolean
+    var
+        DateFormula: DateFormula;
+        TextField: Text;
+        IntegerField: Integer;
+        DecimalField: Decimal;
+        CharField: Char;
+        CodeField: Code[250];
+        DateField: Date;
+        TimeField: Time;
+        DateTime: DateTime;
+    begin
+        if ToVariant.IsText then begin
+            if not Evaluate(TextField, InputText) then
+                exit(false);
+            ToVariant := TextField;
+            exit(true);
+        end;
+
+        if ToVariant.IsDecimal then begin
+            if not Evaluate(DecimalField, InputText) then
+                exit(false);
+            ToVariant := DecimalField;
+            exit(true);
+        end;
+
+        if ToVariant.IsInteger then begin
+            if not Evaluate(IntegerField, InputText) then
+                exit(false);
+            ToVariant := IntegerField;
+            exit(true);
+        end;
+
+        if ToVariant.IsChar then begin
+            if not Evaluate(CharField, InputText) then
+                exit(false);
+            ToVariant := CharField;
+            exit(true);
+        end;
+
+        if ToVariant.IsCode then begin
+            if not Evaluate(CodeField, InputText) then
+                exit(false);
+            ToVariant := CodeField;
+            exit(true);
+        end;
+
+        if ToVariant.IsDate then begin
+            if not Evaluate(DateField, InputText) then
+                exit(false);
+            ToVariant := DateField;
+            exit(true);
+        end;
+
+        if ToVariant.IsTime then begin
+            if not Evaluate(TimeField, InputText) then
+                exit(false);
+            ToVariant := TimeField;
+            exit(true);
+        end;
+
+        if ToVariant.IsDateFormula then begin
+            if not Evaluate(DateFormula, InputText) then
+                exit(false);
+            ToVariant := DateFormula;
+            exit(true);
+        end;
+
+        if ToVariant.IsDateTime then begin
+            if not Evaluate(DateTime, InputText) then
+                exit(false);
+            ToVariant := DateTime;
+            exit(true);
+        end;
+    end;
+}
+
