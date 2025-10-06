@@ -1,0 +1,195 @@
+namespace BCN.KandyToys.DataBridge.Legacy;
+
+using Microsoft.Purchases.Document;
+using Microsoft.Purchases.Archive;
+using Microsoft.Finance.GeneralLedger.Setup;
+using Microsoft.Purchases.Setup;
+using Microsoft.Finance.Currency;
+using BCN.KandyToys.DataBridge.Utilities;
+
+codeunit 50513 LegacyExportPurchaseDocuments
+{
+    var
+        TempPurchaseHeader: Record "Purchase Header" temporary;
+        TempPurchaseLine: Record "Purchase Line" temporary;
+        FileExportHelper: Codeunit FileExportHelper;
+
+    procedure ExportPOData(EVSDBCProcess: Record EVS_DBC_Process; EVSDBCMessageBatch: record EVS_DBC_MessageBatch)
+    var
+        LegacyPurchOrdersTracking: Record "Legacy Purchase Doc. Tracking";
+        POMessageBatch: Record EVS_DBC_MessageBatch;
+        POOutStream: OutStream;
+        POHdrDataBuffer: array[7] of Text;
+        PurchaseOrdersTxt: Label 'PurchaseOrder_%1.csv', Comment = '%1 - Purchase Order No.', locked = true;
+    begin
+        //Check Purchase Orders
+        if not LegacyPurchOrdersTracking.Findset() then
+            exit;
+
+        repeat
+            this.GetPurchaseData(LegacyPurchOrdersTracking."Document No.");
+            if this.TempPurchaseLine.FindSet() then begin
+                //Create Batch
+                this.FileExportHelper.CreateBatch(POMessageBatch, EVSDBCMessageBatch.EVS_DBC_ProcessCode, EVSDBCMessageBatch.EVS_DBC_MessageBatchID, false);
+                //Initialize Outstream
+                POMessageBatch.EVS_DBC_ImportExportFile.CreateOutStream(POOutStream);
+
+                //Populate csv headers
+                Clear(POHdrDataBuffer);
+                this.PopulatePoHeaders(POHdrDataBuffer);
+                this.FileExportHelper.WriteBatch(POOutStream, POHdrDataBuffer, ArrayLen(POHdrDataBuffer));
+                repeat
+                    this.WritePOLine(POOutStream);
+                until this.TempPurchaseLine.Next() = 0;
+
+                //Finalise Batch
+                this.FileExportHelper.FinaliseBatch(POMessageBatch, StrSubstNo(PurchaseOrdersTxt, this.FileExportHelper.FormatText(LegacyPurchOrdersTracking."Document No.", MaxStrLen(LegacyPurchOrdersTracking."Document No."))), false);
+
+                this.RemovePOTracking(LegacyPurchOrdersTracking."Document No.");
+
+            end;
+        until LegacyPurchOrdersTracking.Next() = 0;
+    end;
+
+    local procedure GetPurchaseData(DocNo: Code[20])
+    var
+        PurchaseHeader: Record "Purchase Header";
+        PurchaseLine: Record "Purchase Line";
+        PurchaseHeaderArchive: Record "Purchase Header Archive";
+        PurchaseLineArchive: Record "Purchase Line Archive";
+    begin
+        //Clear Temporary tables
+        if this.TempPurchaseHeader.IsTemporary then // Sanity check
+            if not this.TempPurchaseHeader.IsEmpty then
+                this.TempPurchaseHeader.DeleteAll();
+
+        if this.TempPurchaseLine.IsTemporary then  // Sanity check
+            if not this.TempPurchaseLine.IsEmpty then
+                this.TempPurchaseLine.DeleteAll();
+
+        PurchaseHeader.SetLoadFields("Document Date");
+        if PurchaseHeader.Get(PurchaseHeader."Document Type"::Order, DocNo) then begin
+            PurchaseLine.SetLoadFields("Buy-from Vendor No.", "Document No.", "No.", "Quantity (Base)", "Direct Unit Cost", "Qty. per Unit of Measure");
+            PurchaseLine.SetRange("Document Type", PurchaseLine."Document Type"::Order);
+            PurchaseLine.SetRange("Document No.", PurchaseHeader."No.");
+            PurchaseLine.SetRange(Type, PurchaseLine.Type::Item);
+            PurchaseLine.SetFilter(Quantity, '>0');
+            if PurchaseLine.FindSet() then begin
+                this.TempPurchaseHeader.TransferFields(PurchaseHeader);
+                this.TempPurchaseHeader.Insert(false);
+            end;
+            repeat
+                this.TempPurchaseLine.TransferFields(PurchaseLine);
+                this.TempPurchaseLine.Insert(false);
+            until PurchaseLine.Next() = 0;
+        end else begin
+            //Check Archive
+            PurchaseHeaderArchive.SetRange("Document Type", PurchaseHeaderArchive."Document Type"::Order);
+            PurchaseHeaderArchive.SetRange("No.", DocNo);
+            PurchaseHeaderArchive.SetLoadFields("Document Date");
+            if PurchaseHeaderArchive.FindLast() then begin
+                PurchaseLineArchive.SetLoadFields("Buy-from Vendor No.", "Document No.", "No.", "Quantity (Base)", "Direct Unit Cost", "Qty. per Unit of Measure");
+                PurchaseLineArchive.SetRange("Document Type", PurchaseHeaderArchive."Document Type"::Order);
+                PurchaseLineArchive.SetRange("Document No.", PurchaseHeaderArchive."No.");
+                PurchaseLineArchive.SetRange(Type, PurchaseLineArchive.Type::Item);
+                PurchaseLineArchive.SetRange("Version No.", PurchaseHeaderArchive."Version No.");
+                PurchaseLineArchive.SetFilter(Quantity, '>0');
+                if PurchaseLineArchive.FindSet() then begin
+                    this.TempPurchaseHeader.TransferFields(PurchaseHeaderArchive);
+                    this.TempPurchaseHeader.Insert(false);
+                end;
+                repeat
+                    this.TempPurchaseLine.TransferFields(PurchaseLineArchive);
+                    this.TempPurchaseLine.Insert(false);
+                until PurchaseLineArchive.Next() = 0;
+            end;
+        end;
+    end;
+
+    local procedure WritePOLine(var DataStream: OutStream)
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        LegacyMgmt: Codeunit "Legacy Mgmt.";
+        DataBuffer: array[7] of Text;
+        DateFormatLbl: Label '<Day,2><Month,2><Year>', Locked = true;
+        DirectUnitCost: Decimal;
+        UnitAmountRoundingPrecision: Decimal;
+    begin
+        if this.TempPurchaseLine."Qty. per Unit of Measure" = 0 then
+            this.TempPurchaseLine."Qty. per Unit of Measure" := 1; // Should never occur, protection from division by zero.
+
+        // Note: Unit Cost is expressed as FCY at the customer specific request, even though there is no indication of the currency
+        // code or exchange rate in the file. Rounding Precision is using the Amount, rather than Unit Amount rounding precision for similar reasons.
+
+        //Instead of using Currency.Initialize Kandy wants to use GLSetup as a reference.
+        GeneralLedgerSetup.Get();
+        if GeneralLedgerSetup."Unit-Amount Rounding Precision" <> 0 then
+            UnitAmountRoundingPrecision := GeneralLedgerSetup."Unit-Amount Rounding Precision"
+        else
+            UnitAmountRoundingPrecision := 0.00001;
+
+        DirectUnitCost := Round(this.TempPurchaseLine."Direct Unit Cost" / this.TempPurchaseLine."Qty. per Unit of Measure", UnitAmountRoundingPrecision);
+
+        //construct line
+        Clear(DataBuffer);
+        DataBuffer[1] := LegacyMgmt.FormatDataLine(this.TempPurchaseLine."Buy-from Vendor No.", false);                         //Vendor No.
+        DataBuffer[2] := LegacyMgmt.FormatDataLine(this.TempPurchaseLine."Document No.", false);                                //Purchase Ref/No.
+        DataBuffer[3] := LegacyMgmt.FormatDataLine(Format(this.TempPurchaseHeader."Document Date", 0, DateFormatLbl), false);   //Purchase Date                                                              
+        DataBuffer[4] := LegacyMgmt.FormatDataLine(this.TempPurchaseLine."No.", false);                                         //Item Code
+        DataBuffer[5] := LegacyMgmt.FormatDataLine(Format(this.TempPurchaseLine."Quantity (Base)"), false);                     //Pieces Ordered
+        DataBuffer[6] := LegacyMgmt.FormatDataLine(Format(DirectUnitCost), false);                                              //Direct Unit Cost
+        DataBuffer[7] := LegacyMgmt.FormatDataLine(Format(this.TempPurchaseLine."Exp. Landed Cost (Base, LCY)"), false);        //Expected Landed Cost (LCY)
+
+        this.FileExportHelper.WriteBatch(DataStream, DataBuffer, ArrayLen(DataBuffer));
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Release Purchase Document", OnAfterReleasePurchaseDoc, '', false, false)]
+    local procedure "Release Purchase Document_OnAfterReleasePurchaseDoc"(var PurchaseHeader: Record "Purchase Header"; PreviewMode: Boolean; var LinesWereModified: Boolean; SkipWhseRequestOperations: Boolean)
+    var
+        LegacyPurchOrdersTracking: Record "Legacy Purchase Doc. Tracking";
+    begin
+        if PurchaseHeader."Document Type" <> PurchaseHeader."Document Type"::Order then
+            exit;
+
+        if not LegacyPurchOrdersTracking.Get(PurchaseHeader."No.") then begin
+            LegacyPurchOrdersTracking.Validate("Document No.", PurchaseHeader."No.");
+            LegacyPurchOrdersTracking.Insert(true);
+        end;
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"Release Purchase Document", OnAfterReopenPurchaseDoc, '', false, false)]
+    local procedure "Release Purchase Document_OnAfterReopenPurchaseDoc"(var PurchaseHeader: Record "Purchase Header"; PreviewMode: Boolean; SkipWhseRequestOperations: Boolean)
+    var
+        PurchasePayablesSetup: Record "Purchases & Payables Setup";
+    begin
+        if PurchaseHeader."Document Type" <> PurchaseHeader."Document Type"::Order then
+            exit;
+
+        //Upon release check if Purchase Order is enabled
+        PurchasePayablesSetup.Get();
+        PurchasePayablesSetup.TestField("Archive Orders");
+
+        this.RemovePOTracking(PurchaseHeader."No.");
+    end;
+
+    local procedure RemovePOTracking(DocNo: Code[20])
+    var
+        LegacyPurchOrdersTracking: Record "Legacy Purchase Doc. Tracking";
+    begin
+        if not LegacyPurchOrdersTracking.Get(DocNo) then
+            exit;
+        LegacyPurchOrdersTracking.Delete(true);
+    end;
+
+    local procedure PopulatePoHeaders(var DataBuffer: array[7] of Text)
+    begin
+        Clear(DataBuffer);
+        DataBuffer[1] := 'Vendor No.';
+        DataBuffer[2] := 'Purchase Ref/No.';
+        DataBuffer[3] := 'Purchase Date';
+        DataBuffer[4] := 'Item Code';
+        DataBuffer[5] := 'Pieces Ordered';
+        DataBuffer[6] := 'Item Direct Unit Cost';
+        DataBuffer[7] := 'Expected Landed Cost (LCY)';
+    end;
+}
