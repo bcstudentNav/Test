@@ -1,0 +1,10 @@
+Word Layout Tips
+
+	1. Click on the cell where you are wanting to insert the Content Control field.
+	2. Input a Ctrl+Shift+Space Character
+	3. Then insert the Content Control from the right hand menu
+	4. Then apply your formatting e.g. Align Right
+ 
+Save the document and re-open it – the formatting then sticks.
+ 
+This overcomes one of the major pains with the Word Reporting module 
