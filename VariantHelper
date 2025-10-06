@@ -1,0 +1,36 @@
+codeunit 71129633 EVO_EFL_VariantHelper
+{
+    procedure GetVariantTypeAsText(InputVariant: Variant): Text
+    var
+        TextTok: Label 'text', Locked = true;
+        DecimalTok: Label 'decimal', Locked = true;
+        IntegerTok: Label 'integer', Locked = true;
+        CharTok: Label 'char', Locked = true;
+        CodeTok: Label 'code', Locked = true;
+        DateTok: Label 'date', Locked = true;
+        TimeTok: Label 'time', Locked = true;
+        DateFormulaTok: Label 'date formula', Locked = true;
+        DateTimeTok: Label 'date/time', Locked = true;
+    begin
+        case true of
+            InputVariant.IsText:
+                exit(TextTok);
+            InputVariant.IsDecimal:
+                exit(DecimalTok);
+            InputVariant.IsInteger:
+                exit(IntegerTok);
+            InputVariant.IsChar:
+                exit(CharTok);
+            InputVariant.IsCode:
+                exit(CodeTok);
+            InputVariant.IsDate:
+                exit(DateTok);
+            InputVariant.IsTime:
+                exit(TimeTok);
+            InputVariant.IsDateFormula:
+                exit(DateFormulaTok);
+            InputVariant.IsDateTime:
+                exit(DateTimeTok);
+        end;
+    end;
+}
