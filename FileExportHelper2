@@ -1,0 +1,190 @@
+codeunit 50618 DAR_PAS_FileExportHelper
+{
+    internal procedure CreateBatch(var PassedEVSDBCMessageBatch: Record EVS_DBC_MessageBatch; ProcessCode: Code[20]; ParentMessageBatchID: Integer; Required: Boolean)
+    begin
+        Clear(PassedEVSDBCMessageBatch);
+        PassedEVSDBCMessageBatch.Validate(EVS_DBC_ProcessCode, ProcessCode);
+        PassedEVSDBCMessageBatch.Validate(EVS_DBC_ParentBatchID, ParentMessageBatchID);
+        PassedEVSDBCMessageBatch.Insert(true);
+    end;
+
+    internal procedure WriteBatch(var BufferOutstream: Outstream; var DataBuffer: array[100] of Text; ArrayLength: Integer)
+    var
+        TextBuffer: Text;
+        ArrayCounter: Integer;
+        CT: Char;
+    begin
+        CT := 9; // Tab.
+
+        Clear(TextBuffer);
+        for ArrayCounter := 1 to (ArrayLength - 1) do
+            TextBuffer += (DataBuffer[ArrayCounter] + Format(CT));
+        TextBuffer += DataBuffer[ArrayLen(DataBuffer)];
+
+        BufferOutstream.WriteText(TextBuffer);
+        BufferOutstream.WriteText();
+    end;
+
+    internal procedure FinaliseBatch(var PassedEVSDBCMessageBatch: Record EVS_DBC_MessageBatch; PassedFileName: Text; Required: Boolean)
+    begin
+        PassedEVSDBCMessageBatch.CalcFields(EVS_DBC_ImportExportFile);
+        if PassedEVSDBCMessageBatch.EVS_DBC_ImportExportFile.Length = 0 then begin
+            PassedEVSDBCMessageBatch.Delete();
+            exit;
+        end;
+        PassedEVSDBCMessageBatch.EVS_DBC_ImportExportFileName := CopyStr(PassedFileName, 1, MaxStrLen(PassedEVSDBCMessageBatch.EVS_DBC_ImportExportFileName));
+        PassedEVSDBCMessageBatch.EVS_DBC_ImpExpdDateTime := CurrentDateTime;
+        PassedEVSDBCMessageBatch.EVS_DBC_MessageStatus := EVS_DBC_MessageStatus::Exported;
+        PassedEVSDBCMessageBatch.Modify(true);
+    end;
+
+    internal procedure SetItemFilters(var Item: Record Item; EVSDBCProcess: Record EVS_DBC_Process)
+    var
+        IsHandled: Boolean;
+    begin
+        OnBeforeSetItemFilter(EVSDBCProcess, Item, IsHandled);
+        if not IsHandled then begin
+            Item.Reset();
+            Item.SetCurrentKey(Blocked);
+            Item.SetRange(Blocked, false);
+        end;
+    end;
+
+    internal procedure SetCustomerFilters(var Customer: Record Customer; EVSDBCProcess: Record EVS_DBC_Process)
+    var
+        IsHandled: Boolean;
+    begin
+        OnBeforeSetCustomerFilter(EVSDBCProcess, Customer, IsHandled);
+        if not IsHandled then begin
+            Customer.Reset();
+            Customer.SetCurrentKey(Name);
+            Customer.SetFilter(Customer.Name, '<>%1', '');
+        end;
+    end;
+
+    procedure CheckDimensionExclusion(RecNo: Code[20]; TableID: Integer): Boolean
+    var
+        DefaultDimension: Record "Default Dimension";
+        ExcludeDimensionPixsell: Record DAR_PAS_DimensionExclPixsell;
+    begin
+        DefaultDimension.Reset();
+        DefaultDimension.SetRange("Table ID", TableID);
+        DefaultDimension.SetRange("No.", RecNo);
+        if DefaultDimension.FindSet() then
+            repeat
+                if ExcludeDimensionPixsell.Get(DefaultDimension."Dimension Code", DefaultDimension."Dimension Value Code") then
+                    if ExcludeDimensionPixsell.DAR_PAS_ExcludeFromPixsell then
+                        exit(false);
+            until DefaultDimension.Next() = 0;
+        exit(true);
+    end;
+
+    procedure CheckItemCategoryExclusion(ItemCategory: Code[20]): Boolean
+    var
+        ItemCategoryExclusion: Record DAR_PAS_ItemCatExclPixsell;
+    begin
+        ItemCategoryExclusion.Reset();
+        if ItemCategoryExclusion.Get(ItemCategory) then
+            if ItemCategoryExclusion.DAR_PAS_ExcludeFromPixsell then
+                exit(false);
+        exit(true);
+    end;
+
+    procedure FormatText(TextValue: Text; MaxLength: Integer): Text;
+    var
+        EVOEFLTextHelper: codeunit EVO_EFL_TextHelper;
+
+        NewValue: Text;
+    begin
+        NewValue := EVOEFLTextHelper.RemoveControlCharacters(TextValue);
+        if MaxLength > 0 then
+            NewValue := CopyStr(NewValue, 1, MaxLength);
+
+        exit(NewValue);
+    end;
+
+    procedure FormatInteger(IntegerValue: Integer; MaxLength: Integer): Text
+    var
+        NewValue: Text;
+
+        OverflowErr: Label 'Overflow attempting to format value ''%1'' to %2 characters.', Comment = '%1 = Value, %2 = Max Length';
+    begin
+        NewValue := Format(IntegerValue, 0, 9);
+
+        // Sanity Check.
+        //
+        if (MaxLength > 0) and (StrLen(NewValue) > MaxLength) then
+            Error(OverflowErr, IntegerValue, MaxLength);
+
+        exit(FormatText(NewValue, MaxLength));
+    end;
+
+    procedure FormatDecimal(DecimalValue: Decimal; MaxLength: Integer; MinDecimalPlaces: Integer; MaxDecimalPlaces: Integer): Text
+    var
+        NewValue: Text;
+
+        FormatTxt: Label '<Precision,%1:%2><Standard Format,1>', Locked = true;
+        OverflowErr: Label 'Overflow attempting to format value ''%1'' to %2 characters with decimal places %3:%4.', Comment = '%1 = Value, %2 = Max Length, %3 = Min DP, %4 = Max DP';
+    begin
+        NewValue := Format(DecimalValue, 0, StrSubstNo(FormatTxt, MinDecimalPlaces, MaxDecimalPlaces));
+
+        // Sanity Check.
+        //
+        if (MaxLength > 0) and (StrLen(NewValue) > MaxLength) then
+            Error(OverflowErr, DecimalValue, MaxLength, MinDecimalPlaces, MaxDecimalPlaces);
+
+        exit(FormatText(NewValue, MaxLength));
+    end;
+
+    procedure FormatDecimal(DecimalValue: Decimal; IntegerCharacters: Integer; DecimalCharacters: Integer): Text
+    begin
+        // Simplified overload (thanks Aidan!).
+        //
+        exit(FormatDecimal(DecimalValue, IntegerCharacters + DecimalCharacters + 1, DecimalCharacters, DecimalCharacters));
+    end;
+
+    procedure FormatDate(DateValue: Date): Text
+    var
+        FormatTxt: Label '<Year4><Month,2><Day,2>', Locked = true;
+    begin
+        exit(Format(DateValue, 0, FormatTxt));
+    end;
+
+    procedure FormatDate(DateTimeValue: DateTime): Text
+    begin
+        // Allows for DateTime values to be formatted
+        exit(FormatDate(DT2Date(DateTimeValue)));
+    end;
+
+    procedure FormatBoolean(BooleanValue: Boolean): Text[1]
+    var
+        YesTxt: Label 'Y', Locked = true;
+        NoTxt: Label 'N', Locked = true;
+    begin
+        if BooleanValue then
+            exit(YesTxt)
+        else
+            exit(NoTxt);
+    end;
+
+    procedure GetCurrencyCode(CurrencyCode: Code[10]): Code[10]
+    var
+        GeneralLedgerSetup: Record "General Ledger Setup";
+    begin
+        if CurrencyCode <> '' then
+            exit(CurrencyCode);
+
+        GeneralLedgerSetup.Get();
+        exit(GeneralLedgerSetup."LCY Code");
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeSetItemFilter(EVSDBCProcess: Record EVS_DBC_Process; var Item: Record Item; var IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeSetCustomerFilter(EVSDBCProcess: Record EVS_DBC_Process; var Customer: Record Customer; var IsHandled: Boolean)
+    begin
+    end;
+}
