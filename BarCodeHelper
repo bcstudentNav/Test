@@ -1,0 +1,312 @@
+codeunit 71129585 EVO_EFL_BarcodeHelper
+{
+    procedure ValidateGS1CompanyPrefix(GS1CompanyPrefix: Code[11])
+    var
+        IsHandled: Boolean;
+        InvalidGS1CompanyPrefixErr: Label 'The GS1 company prefix specified must be between 6 and 11 characters in length.';
+    begin
+        Clear(IsHandled);
+        EVO_EFL_OnBeforeValidateGS1CompanyPrefix(GS1CompanyPrefix);
+
+        if not IsHandled then
+            if (StrLen(GS1CompanyPrefix) < 6) or (StrLen(GS1CompanyPrefix) > 11) then
+                Error(InvalidGS1CompanyPrefixErr);
+
+        EVO_EFL_OnAfterValidateGS1CompanyPrefix(GS1CompanyPrefix);
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure EVO_EFL_OnBeforeValidateGS1CompanyPrefix(var GS1CompanyPrefix: Code[11])
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure EVO_EFL_OnAfterValidateGS1CompanyPrefix(var GS1CompanyPrefix: Code[11])
+    begin
+    end;
+
+
+    procedure TestGS1Setup()
+    begin
+        GetCompanyInformation();
+        GetInventorySetup();
+        CompanyInformation.TestField(EVO_EFL_GS1CompanyPrefix);
+    end;
+
+    procedure CreateEAN13Barcode(PackPrefix: Code[1]; GS1Prefix: Code[11]; BarcodeStem: Code[20]): Code[20]
+    var
+        CheckDigit: Integer;
+        Barcode: Code[14];
+        InvalidBarcodeCreatedErr: Label 'An invalid barcode was created against the defined barcode symbology. Please check the setup of the barcodes before trying again.';
+    begin
+        // Check license
+        if not EVOEFLLicensing.ApplicationIsLicensed() then
+            exit;
+
+        GetInventorySetup();
+        TestGS1Setup();
+
+        Barcode := CopyStr(PackPrefix + GS1Prefix + BarcodeStem, 1, MaxStrLen(Barcode));
+        if not (StrLen(Barcode) in [12, 13]) then
+            Error(InvalidBarcodeCreatedErr);
+
+        case StrLen(Barcode) of
+            12:
+                CheckDigit := 1 + StrCheckSum(Barcode, '131313131313');
+            13:
+                CheckDigit := 1 + StrCheckSum(Barcode, '3131313131313');
+        end;
+        Barcode := Barcode + SelectStr(CheckDigit, '0,1,2,3,4,5,6,7,8,9');
+        exit(Barcode);
+    end;
+
+    procedure CreateBarcodesFromItemReference(var ItemReference: Record "Item Reference"; Prompt: Boolean)
+    var
+        Item: Record Item;
+    begin
+        // Check license
+        if not EVOEFLLicensing.ApplicationIsLicensed() then
+            exit;
+
+        Item.Get(ItemReference.GetFilter("Item No."));
+        CreateBarcodesFromItem(Item, Prompt);
+    end;
+
+    procedure CreateBarcodesFromItem(var Item: Record Item; Prompt: Boolean)
+    var
+        ItemReference: Record "Item Reference";
+        UnitOfMeasure: Record "Unit of Measure";
+        ItemUnitofMeasure: Record "Item Unit of Measure";
+        Barcode: Code[20];
+        CreateBarcodesQst: Label 'Creating barcodes will generate a unique barcode number and use that as the basis for the full barcode that is created.\\Any existing barcodes will be deleted and new barcodes created.\\Go ahead and create barcodes?';
+    begin
+        // Check license
+        if not EVOEFLLicensing.ApplicationIsLicensed() then
+            exit;
+
+        GetCompanyInformation();
+        GetInventorySetup();
+
+        if Prompt then
+            if not Confirm(CreateBarcodesQst, false) then
+                exit;
+
+        ItemReference.SetRange("Item No.", Item."No.");
+        ItemReference.SetRange("Reference Type", ItemReference."Reference Type"::"Bar Code");
+        ItemReference.DeleteAll(true);
+
+        GetCompanyInformation();
+        Item.EVO_EFL_GS1CompanyPrefix := CompanyInformation.EVO_EFL_GS1CompanyPrefix;
+        Item.EVO_EFL_BarcodeStemNo := GetNextBarcodeStemNumber(CompanyInformation.EVO_EFL_GS1CompanyPrefix);
+        Item.Modify();
+        AddBarcodeStemReference(Item.EVO_EFL_GS1CompanyPrefix, Item.EVO_EFL_BarcodeStemNo, Database::Item, Item."No.");
+
+        ItemUnitofMeasure.Reset();
+        ItemUnitofMeasure.SetRange("Item No.", Item."No.");
+        if ItemUnitofMeasure.FindSet() then
+            repeat
+                Clear(Barcode);
+                UnitOfMeasure.Get(ItemUnitofMeasure.Code);
+                if (UnitOfMeasure.EVO_EFL_BarcodePrefix <> '') or (UnitOfMeasure.Code = Item."Base Unit of Measure") then
+                    Barcode := CreateEAN13Barcode(UnitOfMeasure.EVO_EFL_BarcodePrefix, Item.EVO_EFL_GS1CompanyPrefix, Item.EVO_EFL_BarcodeStemNo);
+
+                if Barcode <> '' then begin
+                    ItemReference.Init();
+                    ItemReference.Validate("Item No.", ItemUnitofMeasure."Item No.");
+                    ItemReference.Validate("Unit of Measure", ItemUnitofMeasure.Code);
+                    ItemReference.Validate("Reference Type", ItemReference."Reference Type"::"Bar Code");
+                    ItemReference.Validate("Reference No.", Barcode);
+                    ItemReference.Insert(true);
+                end;
+            until ItemUnitofMeasure.Next() = 0;
+    end;
+
+
+    procedure GetNextBarcodeStemNumber(): Code[20]
+    begin
+        GetCompanyInformation();
+        exit(GetNextBarcodeStemNumber(CompanyInformation.EVO_EFL_GS1CompanyPrefix));
+    end;
+
+    procedure GetNextBarcodeStemNumber(GS1CompanyPrefix: Code[11]): Code[20]
+    var
+        EVOEFLBarcodeStem: Record EVO_EFL_BarcodeStem;
+        MinBarcode: Text;
+        MaxBarcode: Text;
+        UniqueStem: Code[11];
+        NextBarcodeStemNo: Code[11];
+        IsHandled: Boolean;
+        StemLength: Integer;
+        ThereAreNoBarcodesAvailableErr: Label 'There are no available barcodes to be allocated to this item.';
+    begin
+        GetCompanyInformation();
+        GetInventorySetup();
+        TestGS1Setup();
+
+        Clear(MinBarcode);
+        Clear(MaxBarcode);
+        StemLength := 12 - StrLen(GS1CompanyPrefix);
+        MinBarcode := MinBarcode.PadRight(StemLength, '0');
+        MaxBarcode := MaxBarcode.PadRight(StemLength, '9');
+
+        UniqueStem := CopyStr(MinBarcode, 1, MaxStrLen(UniqueStem));
+
+        OnBeforeCalcNextBarcodeStemNumber(UniqueStem, MinBarcode, MaxBarcode, IsHandled);
+        if not IsHandled then begin
+            EVOEFLBarcodeStem.SetRange(EVO_EFL_GS1CompanyPrefix, GS1CompanyPrefix);
+            if not EVOEFLBarcodeStem.FindLast() then
+                exit(UniqueStem);
+            NextBarcodeStemNo := CopyStr(EVOEFLBarcodeStem.EVO_EFL_No, 1, MaxStrLen(NextBarcodeStemNo));
+            if NextBarcodeStemNo <> MaxBarcode then
+                NextBarcodeStemNo := IncStr(NextBarcodeStemNo);
+        end;
+        Clear(IsHandled);
+        OnAfterCalcNextBarcodeStemNumber(NextBarcodeStemNo, MinBarcode, MaxBarcode, IsHandled);
+
+        if not IsHandled then
+            if NextBarcodeStemNo = MaxBarcode then
+                Error(ThereAreNoBarcodesAvailableErr);
+
+        exit(NextBarcodeStemNo);
+    end;
+
+    procedure AddBarcodeStemReference(GS1CompanyPrefix: Code[11]; BarcodeStemNo: Code[20]; SourceTableId: Integer; SourceNo: Code[20])
+    var
+        EVOEFLBarcodeStem: Record EVO_EFL_BarcodeStem;
+    begin
+        EVOEFLBarcodeStem.Init();
+        EVOEFLBarcodeStem.EVO_EFL_GS1CompanyPrefix := GS1CompanyPrefix;
+        EVOEFLBarcodeStem.EVO_EFL_No := BarcodeStemNo;
+        EVOEFLBarcodeStem.EVO_EFL_BarcodeRelationTableId := SourceTableId;
+        EVOEFLBarcodeStem.EVO_EFL_BarcodeRelationNo := SourceNo;
+        EVOEFLBarcodeStem.Insert();
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnBeforeCalcNextBarcodeStemNumber(var UniqueStem: Code[11]; var MinBarcode: Text; var MaxBarcode: Text; IsHandled: Boolean)
+    begin
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterCalcNextBarcodeStemNumber(var NextItemBarcodeStemNo: Code[11]; var MinBarcode: Text; var MaxBarcode: Text; IsHandled: Boolean)
+    begin
+    end;
+
+    procedure FindUOMBarcode(ItemUnitOfMeasure: Record "Item Unit of Measure"; VariantCode: Code[20]): Text[50]
+    var
+        ItemReference: Record "Item Reference";
+    begin
+        ItemReference.SetRange("Item No.", ItemUnitOfMeasure."Item No.");
+        ItemReference.SetRange("Variant Code", VariantCode);
+        ItemReference.SetRange("Unit of Measure", ItemUnitOfMeasure.Code);
+        ItemReference.SetRange("Reference Type", ItemReference."Reference Type"::"Bar Code");
+        if ItemReference.IsEmpty then
+            Clear(ItemReference)
+        else
+            ItemReference.FindFirst();
+        exit(ItemReference."Reference No.");
+    end;
+
+    procedure GetItemFromReference(var ItemReference: Record "Item Reference"; ItemReferenceText: Text): Integer
+    var
+        Item: Record Item;
+        SearchItemReference: Record "Item Reference";
+        ItemReferenceNotTempErr: Label 'The item reference table variable that has been passed to the GetItemFromReference() function has not been declared as a temporary variable. This is a programming error and must be corrected.';
+    begin
+        if not ItemReference.IsTemporary then
+            Error(ItemReferenceNotTempErr);
+        ItemReference.DeleteAll();
+
+        if Item.Get(CopyStr(ItemReferenceText, 1, MaxStrLen(Item."No."))) then begin
+            ItemReference.Init();
+            ItemReference."Item No." := Item."No.";
+            ItemReference."Unit of Measure" := Item."Base Unit of Measure";
+            ItemReference.Insert();
+        end else begin
+            SearchItemReference.SetCurrentKey("Reference No.");
+            SearchItemReference.SetRange("Reference No.", CopyStr(ItemReferenceText, 1, MaxStrLen(ItemReference."Reference No.")));
+            if SearchItemReference.FindSet() then
+                repeat
+                    ItemReference := SearchItemReference;
+                    ItemReference.Insert();
+                until SearchItemReference.Next() = 0;
+        end;
+
+        exit(ItemReference.Count);
+    end;
+
+    procedure BarcodeExists(BarcodeNo: Code[20]): Boolean
+    var
+        ItemReference: Record "Item Reference";
+        BarcodeExistsFlag: Boolean;
+    begin
+        ItemReference.SetRange("Reference Type", ItemReference."Reference Type"::"Bar Code");
+        ItemReference.SetRange("Reference No.", BarcodeNo);
+        BarcodeExistsFlag := not ItemReference.IsEmpty;
+        OnAfterBarcodeExists(BarcodeNo, BarcodeExistsFlag);
+        exit(BarcodeExistsFlag);
+    end;
+
+
+    // Barcode encoding routines
+
+    procedure Encode1DBarcodeAsText(BarcodeToEncode: Text; Symbology: Enum "Barcode Symbology"): Text
+    var
+        EnvironmentInformation: Codeunit "Environment Information";
+        BarcodeText: Text;
+        BarcodeFontProvider: Interface "Barcode Font Provider";
+        BarcodeTok: Label '*%1*', Comment = '%1 - Barcode to encode', Locked = true;
+    begin
+        if EnvironmentInformation.IsSaaS() then begin
+            BarcodeFontProvider := Enum::"Barcode Font Provider"::IDAutomation1D;
+            BarcodeText := BarcodeFontProvider.EncodeFont(BarcodeToEncode, Symbology);
+        end else
+            BarcodeText := StrSubstNo(BarcodeTok, BarcodeToEncode);
+        exit(BarcodeText)
+    end;
+
+
+    procedure Encode2DBarcodeAsText(BarcodeToEncode: Text; Symbology: Enum "Barcode Symbology 2D"): Text
+    var
+        EnvironmentInformation: Codeunit "Environment Information";
+        BarcodeText: Text;
+        BarcodeFontProvider2D: Interface "Barcode Font Provider 2D";
+        BarcodeTok: Label '*%1*', Comment = '%1 - Barcode to encode', Locked = true;
+    begin
+        if EnvironmentInformation.IsSaaS() then begin
+            BarcodeFontProvider2D := Enum::"Barcode Font Provider 2D"::IDAutomation2D;
+            BarcodeText := BarcodeFontProvider2D.EncodeFont(BarcodeToEncode, Symbology);
+        end else
+            BarcodeText := StrSubstNo(BarcodeTok, BarcodeToEncode);
+        exit(BarcodeText);
+    end;
+
+    procedure Encode2DBarcodeAsImage(BarcodeToEncode: Text; Symbology: Enum "Barcode Symbology 2D"): Codeunit "Temp Blob"
+    var
+        BarcodeFontProvider2D: Interface "Barcode Image Provider 2D";
+    begin
+        exit(BarcodeFontProvider2D.EncodeImage(BarcodeToEncode, Symbology));
+    end;
+
+    local procedure GetCompanyInformation()
+    begin
+        if IsNullGuid(CompanyInformation.SystemId) then
+            CompanyInformation.Get();
+    end;
+
+    local procedure GetInventorySetup()
+    begin
+        if IsNullGuid(InventorySetup.SystemId) then
+            InventorySetup.Get();
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure OnAfterBarcodeExists(var BarcodeNumber: Code[20]; var BarcodeExists: Boolean)
+    begin
+    end;
+
+    var
+        InventorySetup: Record "Inventory Setup";
+        CompanyInformation: Record "Company Information";
+        EVOEFLLicensing: Codeunit EVO_EFL_Licensing;
+}
