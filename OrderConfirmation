@@ -1,0 +1,1536 @@
+report 50011 "PDL002_OrderConfirmationGB"
+{
+    DefaultLayout = RDLC;
+    RDLCLayout = './src/Report/Layout/PDL002_OrderConfirmationGB.rdl';
+    Caption = 'Premier Order Confirmation';
+    UsageCategory = ReportsAndAnalysis;
+    ApplicationArea = All;
+
+    dataset
+    {
+        dataitem("Sales Header"; "Sales Header")
+        {
+            DataItemTableView = sorting("Document Type", "No.") where("Document Type" = const(Order));
+            RequestFilterFields = "No.", "Sell-to Customer No.", "No. Printed";
+            RequestFilterHeading = 'Sales Order';
+            column(DocumentType_SalesHeader; "Document Type") { }
+            column(No_SalesHeader; "No.") { }
+            column(InvDiscAmtCaption; InvDiscAmtCaptionLbl) { }
+            dataitem(CopyLoop; "Integer")
+            {
+                DataItemTableView = sorting(Number);
+                column(PDL002_VATAmount; PDL002_VATAmount)
+                {
+                    AutoFormatExpression = "Sales Header"."Currency Code";
+                    AutoFormatType = 1;
+                }
+                column(PDL002_VATAmtLineVATAmountText; TempVATAmountLine.VATAmountText()) { }
+                column(PDL002_VATBaseAmount; PDL002_VATBaseAmount)
+                {
+                    AutoFormatExpression = "Sales Header"."Currency Code";
+                    AutoFormatType = 1;
+                }
+                column(PDL002_VATDiscountAmount; PDL002_VATDiscountAmount)
+                {
+                    AutoFormatExpression = "Sales Header"."Currency Code";
+                    AutoFormatType = 1;
+                }
+                column(PDL002_TotalAmountInclVAT; PDL002_TotalAmountInclVAT)
+                {
+                    AutoFormatExpression = "Sales Header"."Currency Code";
+                    AutoFormatType = 1;
+                }
+                dataitem(PageLoop; "Integer")
+                {
+                    DataItemTableView = sorting(Number) where(Number = const(1));
+                    column(OrderConfirmationCaption; StrSubstNo(Text004Lbl, CopyText)) { }
+                    column(CustAddr1; CustAddr[1]) { }
+                    column(CompanyAddr1; CompanyAddr[1]) { }
+                    column(CustAddr2; CustAddr[2]) { }
+                    column(CompanyAddr2; CompanyAddr[2]) { }
+                    column(CustAddr3; CustAddr[3]) { }
+                    column(CompanyAddr3; CompanyAddr[3]) { }
+                    column(CustAddr4; CustAddr[4]) { }
+                    column(CompanyAddr4; CompanyAddr[4]) { }
+                    column(CustAddr5; CustAddr[5]) { }
+                    column(CompanyInfoHomePage; CompanyInformation."Home Page") { }
+                    column(CompanyInfoEmail; CompanyInformation."E-Mail") { }
+                    column(CompanyInfoPhoneNo; CompanyInformation."Phone No.") { }
+                    column(CustAddr6; CustAddr[6]) { }
+                    column(CompanyInfoVATRegNo; CompanyInformation."VAT Registration No.") { }
+                    column(CompanyInfoBankName; CompanyBankAccount.Name) { }
+                    column(CompanyInfoBankAccountNo; CompanyBankAccount."Bank Account No.") { }
+                    column(BilltoCustNo_SalesHeader; "Sales Header"."Bill-to Customer No.") { }
+                    column(BilltoCustNo_SalesHeaderCaption; "Sales Header".FieldCaption("Bill-to Customer No.")) { }
+                    column(DocumentDate_SalesHeader; Format("Sales Header"."Document Date", 0, 4)) { }
+                    column(VATNoText; VATNoText) { }
+                    column(VATRegNo_SalesHeader; "Sales Header"."VAT Registration No.") { }
+                    column(ShipmentDate_SalesHeader; Format("Sales Header"."Shipment Date")) { }
+                    column(SalesPersonText; SalesPersonText) { }
+                    column(Name_SalesPurchPerson; SalesPersonPurchaser.Name) { }
+                    column(ReferenceText; "Sales Header".FieldCaption("External Document No.")) { }
+                    column(YourRef_SalesHeader; "Sales Header"."External Document No.") { }
+                    column(CustAddr7; CustAddr[7]) { }
+                    column(CustAddr8; CustAddr[8]) { }
+                    column(CompanyAddr5; CompanyAddr[5]) { }
+                    column(CompanyAddr6; CompanyAddr[6]) { }
+                    column(PricesIncVAT_SalesHeader; "Sales Header"."Prices Including VAT") { }
+                    column(PricesIncVAT_SalesHeaderCaption; "Sales Header".FieldCaption("Prices Including VAT")) { }
+                    column(CompanyInfoBankBranchNo; CompanyBankAccount."Bank Branch No.") { }
+                    column(CompanyInfo3Picture; CompanyInformation3.Picture) { }
+                    column(CompanyInfo2Picture; CompanyInformation2.Picture) { }
+                    column(CompanyInfo1Picture; CompanyInformation1.Picture) { }
+                    column(Number_CopyLoop; CopyLoop.Number) { }
+                    column(PageCaption; StrSubstNo(Text005Lbl, '')) { }
+                    column(PaymentDiscountText; PaymentDiscountText) { }
+                    column(Desc_ShipmentMethod; ShipmentMethod.Description) { }
+                    column(Description_PaymentTerms; PaymentTerms.Description) { }
+                    column(FormatPricesIncVAT_SalesHeader; Format("Sales Header"."Prices Including VAT")) { }
+                    column(DocDateCaption; DocDateCaptionLbl) { }
+                    column(EmailCaption; EmailCaptionLbl) { }
+                    column(HomePageCaption; HomePageCaptionLbl) { }
+                    column(PhoneNoCaption; PhoneNoCaptionLbl) { }
+                    column(VATRegNoCaption; VATRegNoCaptionLbl) { }
+                    column(BankNameCaption; BankNameCaptionLbl) { }
+                    column(BankAccNoCaption; BankAccNoCaptionLbl) { }
+                    column(ShpDateCaption; ShpDateCaptionLbl) { }
+                    column(OrderNoCaption; OrderNoCaptionLbl) { }
+                    column(BankBranchNoCaption; BankBranchNoCaptionLbl) { }
+                    column(PaymentTermsCaption; PaymentTermsCaptionLbl) { }
+                    column(ShpMethodCaption; ShpMethodCaptionLbl) { }
+                    column(PaymentDiscountCaption; PaymentDiscountCaptionLbl) { }
+                    column(PDL002_PageLbl; Page_Lbl) { }
+                    column(PDL002_CompanyInfoName; CompanyInformation.Name) { }
+                    column(PDL002_CompanyInfoFSCCertificate; CompanyInformation."PDL001_FSCCertificateNo.") { }
+                    column(PDL002_CompanyInfoPicture; CompanyInformation.Picture) { }
+                    column(PDL002_CompanyInfoFSCLogo; CompanyInformation.PDL001_FSCLogo) { }
+                    column(PDL002_CompanyInfoFax; CompanyInformation."Fax No.") { }
+                    column(PDL002_CompanyInfoEmail; CompanyInformation."E-Mail") { }
+                    column(PDL002_CompanyInfoEori; CompanyInformation."EORI Number") { }
+                    column(PDL002_EORINoLbl; EORINoLbl) { }
+                    column(PDL002_TelLbl; TelLbl) { }
+                    column(PDL002_FaxLbl; FaxLbl) { }
+                    column(PDL002_EmailCaptionLbl; REmailCaptionLbl) { }
+                    column(PDL002_OrderNoLbl; OrderNoLbl) { }
+                    column(PDL002_FSCCertificateLbl; FSCCertificateLbl) { }
+                    column(PDL002_CustomerOrderNoLbll; CustomerOrderNoLbl) { }
+                    column(PDL002_OrderDateLbl; OrderDateLbl) { }
+                    column(PDL002_InvoiceAddrLbl; InvoiceAddrLbl) { }
+                    column(PDL002_DeliveryAddrLbl; DeliveryAddrLbl) { }
+                    column(PDL002_DeliveryRequestedLbl; DeliveryRequestedLbl) { }
+                    column(PDL002_DepartmentLbl; DepartmentLbl) { }
+                    column(PDL002_SalespersonCaptionLbl; SalespersonCaptionLbl) { }
+                    column(PDL002_IncotermsLblCaption; IncotermsLblCaptionLbl) { }
+                    column(PDL002_AppliesToLbl; AppliesToLbl) { }
+                    column(PDL002_NumberLbl; NumberLbl) { }
+                    column(PDL002_YourRefLbl; YourRefLbl) { }
+                    column(PDL002_CatalogPageNoLbl; CatalogPageNoLbl) { }
+                    column(PDL002_ItemNoCaptionLbl; ItemNoCaptionLbl) { }
+                    column(PDL002_DescColourLbl; DescColourLbl) { }
+                    column(PDL002_BarcodeLbl; BarcodeLbl) { }
+                    column(PDL002_OrderQtyLbl; OrderQtyLbl) { }
+                    column(PDL002_UnitPriceLbl; UnitPriceLbl) { }
+                    column(PDL002_AmountLbl; AmountLbl) { }
+                    column(PDL002_SetComprisedLbl; SetComprisedLbl) { }
+                    column(PDL002_ClassificationLbl; ClassificationLbl) { }
+                    column(PDL002_CarriedForwardLbl; CarriedForwardLbl) { }
+                    column(PDL002_PaymentTermsLbl; PaymentTermsLbl) { }
+                    column(PDL002_AllPricesVATLbl; AllPricesVATLbl) { }
+                    column(PDL002_ConsigNetValueLbl; ConsigNetValueLbl) { }
+                    column(PDL002_AckOrderLbl; strsubstno(AckOrderLbl, RCompanyInformation.Name)) { }
+                    column(PDL002_CopiesLbl; CopiesLbl) { }
+                    column(PDL002_AllgoodsSuppliedLbl; AllgoodsSuppliedLbl) { }
+                    column(PDL002_PrintDateTakenByLbl; strsubstno(PrintDateTakenByLbl, Format(Today, 0, 4), "Sales Header".PDL001_TakenByInitials, GetUserNameFromSID("Sales Header".SystemCreatedBy), EVSESFTakenAt.EVS_ESF_Description, GetShipToAddressPhoneNo("Sales Header"."Ship-to Code"))) { }
+                    column(PDL002_PleaseNoteLbl; PleaseNoteLbl) { }
+                    column(PDL002_OutOfStockItemsLbl; OutOfStockItemsLbl) { }
+                    column(PDL002_NoStockAvailableLbl; NoStockAvailableLbl) { }
+                    column(PDL002_NoteKeptLbl; NoteKeptLbl) { }
+                    column(PDL002_CatalogueLbl; CatalogueLbl) { }
+                    column(PDL002_OpenOrderLbl; OpenOrderLbl) { }
+                    column(PDL002_CustOrderNoLbl; CustOrderNoLbl) { }
+                    column(PDL002_OurOrderNoLbl; OurOrderNoLbl) { }
+                    column(PDL002_OSLinesLbl; OSLinesLbl) { }
+                    column(PDL002_OSValueLbl; OSValueLbl) { }
+                    column(PDL002_LineAmountLbl; LineAmountLbl) { }
+                    column(PDL002_VATAmountSpecLbl; VATAmountSpecLbl) { }
+                    column(PDL002_InvDiscBaseAmountLbl; InvDiscBaseAmountLbl) { }
+                    column(PDL002_InvoiceDiscAmountLbl; InvoiceDiscAmountLbl) { }
+                    column(PDL002_PaymentDiscLbl; PaymentDiscLbl) { }
+                    column(PDL002_TypeofSupplyLbl; TypeofSupplyLbl) { }
+                    column(PDL002_ShipMethodLbl; ShipMethodLbl) { }
+                    column(PDL002_ForSignatureLbl; ForSignatureLbl) { }
+                    column(PDL002_ConfirmOrderLbl; strsubstno(ConfirmOrderLbl, CompanyInformation.Name)) { }
+                    column(PDL002_AmendApplicableLbl; AmendApplicableLbl) { }
+                    column(PDL002_NameLbl; NameLbl) { }
+                    column(PDL002_OnBehalfLbl; OnBehalfLbl) { }
+                    column(PDL002_DateLbl; DateLbl) { }
+                    column(PDL002_PositionLbl; PositionLbl) { }
+                    column(PDL002_SignatureLbl; SignatureLbl) { }
+                    column(PDL002_SignPostFaxLbl; SignPostFaxLbl) { }
+                    column(PDL002_OrderConfirmationLbl; OrderConfirmationLbl) { }
+                    column(PDL002_ForestStewardhipCouncilLbl; ForestStewardhipCouncilLbl) { }
+                    column(PDL002_ExternalDocNo; "Sales Header"."External Document No.") { }
+                    column(PDL002_OrderDate; Format("Sales Header"."Order Date", 0, 4)) { }
+                    column(PDL002_RequestedDelDate; Format("Sales Header"."Requested Delivery Date", 0, 4)) { }
+                    column(PDL002_SalesHdrSellToCustomerName; "Sales Header"."Sell-to Customer Name") { }
+                    column(PDL002_PrintConfirmation; PrintConfirmation) { }
+                    column(PDL002_DimensionValName; DimensionValName) { }
+                    column(PDL002_LineModifiedFlag; LineModifiedFlag) { }
+                    column(PDL002_ProformaInvoiceLbl; ProformaInvoiceLbl) { }
+                    column(PDL002_PaymentDetailsLbl; PaymentDetailsLbl) { }
+                    column(PDL002_BankNameLbl; BankNameLbl) { }
+                    column(PDL002_SWIFTNoLbl; SWIFTNoLbl) { }
+                    column(PDL002_IBANLbl; IBANLbl) { }
+                    column(PDL002_RevisedPriceLbl; RevisedPriceLbl) { }
+                    column(PDL002_RevisedUnitPriceLbl; RevisedUnitPriceLbl) { }
+                    column(PDL002_CBMLbl; CBMLbl) { }
+                    column(PDL002_TotalCBMLbl; TotalCBMLbl) { }
+                    column(PDL002_InvoiceNoLbl; InvoiceNoLbl) { }
+                    column(PDL002_CartonQtyLbl; CartonQtyLbl) { }
+                    column(PDL002_SurchargeLbl; SurchargeLbl) { }
+                    column(PDL002_TotalCartonsLbl; TotalCartonsLbl) { }
+                    column(PDL002_PleaseMakePaymentsLbl; PleaseMakePaymentsLbl) { }
+                    column(PDL002_Incoterms; IncotermsText) { }
+                    column(PDL002_CustEORITxt; CustEORITxt) { }
+                    column(PDL002_CustEORINumber; CustEORINumber) { }
+                    column(PDL002_CommentsExist; DoCommentsExist()) { }
+                    column(PDL002_HeaderDiscTxt; HeaderDiscTxt) { }
+                    column(PDL002_SupplierText; SupplierText) { }
+                    column(PDL002_DepartmentText; DepartmentText) { }
+                    column(PDL002_RemoteAckTxt; RemoteAckTxt) { }
+                    column(PDL002_CopyPDL; PDL002_CopyText) { }
+                    column(PDL002_CurrencySymbol; CurrSymbol) { }
+                    column(PDL002_DisplayAssemblyInformation; DisplayAssemblyInformation) { }
+                    dataitem(DimensionLoop1; "Integer")
+                    {
+                        DataItemLinkReference = "Sales Header";
+                        DataItemTableView = sorting(Number) where(Number = filter(1 ..));
+                        column(DimText; DimText) { }
+                        column(Number_IntegerLine; Number) { }
+                        column(HdrDimsCaption; HdrDimsCaptionLbl) { }
+
+                        trigger OnAfterGetRecord()
+                        var
+                            DimText2ParametersLbl: label '%1 %2', comment = '%1- Dimension Code  %2 - Dimension Value Code';
+                            DimText3ParametersLbl: label '%1 %2 %3', comment = '%1 - DimText %2- Dimension Code  %3 - Dimension Value Code';
+                        begin
+                            if Number = 1 then begin
+                                if not DimensionSetEntry1.Find('-') then
+                                    CurrReport.Break();
+                            end else
+                                if not Continue then
+                                    CurrReport.Break();
+
+                            Clear(DimText);
+                            Continue := false;
+                            repeat
+                                OldDimText := DimText;
+                                if DimText = '' then
+                                    DimText := StrSubstNo(DimText2ParametersLbl, DimensionSetEntry1."Dimension Code", DimensionSetEntry1."Dimension Value Code")
+                                else
+                                    DimText :=
+                                    StrSubstNo(DimText3ParametersLbl, DimText, DimensionSetEntry1."Dimension Code", DimensionSetEntry1."Dimension Value Code");
+
+                                if StrLen(DimText) > MaxStrLen(OldDimText) then begin
+                                    DimText := OldDimText;
+                                    Continue := true;
+                                    exit;
+                                end;
+                            until (DimensionSetEntry1.Next() = 0);
+                        end;
+
+                        trigger OnPreDataItem()
+                        begin
+                            if not ShowInternalInfo then
+                                CurrReport.Break();
+                        end;
+                    }
+                    dataitem("Sales Line"; "Sales Line")
+                    {
+                        DataItemLink = "Document Type" = field("Document Type"), "Document No." = field("No.");
+                        DataItemLinkReference = "Sales Header";
+                        DataItemTableView = sorting("Document Type", "Document No.", "Line No.");
+
+                        trigger OnPreDataItem()
+                        begin
+                            CurrReport.Break();
+                        end;
+                    }
+                    dataitem(RoundLoop; "Integer")
+                    {
+                        DataItemTableView = sorting(Number);
+                        column(LineNo_SalesLine; "Sales Line"."Line No.") { }
+                        column(Type_SalesLine; TempSalesLine.Type) { }
+                        column(FormatLineAmount_SalesLine; TempSalesLine."Line Amount")
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(Description_SalesLine; "Sales Line".Description) { }
+                        column(No_SalesLine; "Sales Line"."No.") { }
+                        column(Quantity_SalesLine; "Sales Line".Quantity) { }
+                        column(UnitofMeasure_SalesLine; "Sales Line"."Unit of Measure") { }
+                        column(No_SalesLineCaption; "Sales Line".FieldCaption("No.")) { }
+                        column(Description_SalesLineCaption; "Sales Line".FieldCaption(Description)) { }
+                        column(Quantity_SalesLineCaption; "Sales Line".FieldCaption(Quantity)) { }
+                        column(UnitofMeasure_SalesLineCaption; "Sales Line".FieldCaption("Unit of Measure")) { }
+                        column(UnitPrice_SalesLine; SalesUnitPrice)
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 2;
+                        }
+                        column(LineDiscount_SalesLine; "Sales Line"."Line Discount %") { }
+                        column(LineAmount_SalesLine; "Sales Line"."Line Amount")
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(VATIdentifier_SalesLine; "Sales Line"."VAT Identifier") { }
+                        column(VATIdentifier_SalesLineCaption; "Sales Line".FieldCaption("VAT Identifier")) { }
+                        column(VATBaseDisc_SalesHeader; "Sales Header"."VAT Base Discount %") { }
+                        column(TotalInvoiceDiscAmount; TotalInvoiceDiscAmount) { }
+                        column(TotalLineAmount; TotalLineAmount) { }
+                        column(InvDiscountAmt_SalesLine; -TempSalesLine."Inv. Discount Amount")
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(TotalText; TotalText) { }
+                        column(SalesLineLineAmtInvDiscAmt; TempSalesLine."Line Amount" - TempSalesLine."Inv. Discount Amount")
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(TotalExclVATText; TotalExclVATText) { }
+                        column(VATAmtLineVATAmountText; TempVATAmountLine.VATAmountText()) { }
+                        column(TotalInclVATText; TotalInclVATText) { }
+                        column(VATAmount; VATAmount)
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(SalesLineInvDiscAmtVATAmt; TempSalesLine."Line Amount" - TempSalesLine."Inv. Discount Amount" + VATAmount)
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(VATDiscountAmount; -VATDiscountAmount)
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(VATBaseAmount; VATBaseAmount)
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(TotalAmountInclVAT; TotalAmountInclVAT)
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(UnitPriceCaption; UnitPriceCaptionLbl) { }
+                        column(DiscountPercentCaption; DiscountPercentCaptionLbl) { }
+                        column(AmtCaption; AmtCaptionLbl) { }
+                        column(SubtotalCaption; SubtotalCaptionLbl) { }
+                        column(PaymentDiscountVATCaption; PaymentDiscountVATCaptionLbl) { }
+                        column(PDL002_ItemDesc2; "Sales Line"."Description 2") { }
+                        column(PDL002_SalesLineBarcode; Barcode) { }
+                        column(PDL002_ItemVarDesc; ItemVarDesc) { }
+                        column(PDL002_ItemVarDesc2; ItemVarDesc2) { }
+                        column(PDL002_TotalInvoiceDiscAmount; PDL002_TotalInvoiceDiscAmount) { }
+                        column(PDL002_CataloguePageLast; "Sales Line".PDL001_CataloguePageLast) { }
+                        column(PDL002_TotalLineAmount; PDL002_TotalLineAmount) { }
+                        column(PDL002_InvDiscountAmt_SalesLine; -TempSalesLine."Inv. Discount Amount")
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        column(PDL002_SalesLineLineAmtInvDiscAmt; TempSalesLine."Line Amount" - TempSalesLine."Inv. Discount Amount")
+                        {
+                            AutoFormatExpression = "Sales Header"."Currency Code";
+                            AutoFormatType = 1;
+                        }
+                        dataitem(PDL002_BOMComponent; Integer)
+                        {
+                            DataItemTableView = sorting(Number);
+
+                            column(PDL002_BOMText; AssembyComponentLbl) { }
+                            column(PDL002_ParentItemNo; BOMComponent."Parent Item No.") { }
+                            column(PDL002_BOMNumber; PDL002_BOMComponent.Number) { }
+                            column(PDL002_BOMNo; GetItemBarCode(BOMComponent."No.", BOMComponent."Unit of Measure Code")) { }
+                            column(PDL002_BOMDescription; BOMComponent.Description) { }
+                            column(PDL002_BOMQtyPer; BOMComponent."Quantity per") { }
+
+                            trigger OnPreDataItem()
+                            begin
+                                if not DisplayAssemblyInformation then
+                                    CurrReport.Break();
+
+                                if "Sales Line".Type <> "Sales Line".Type::Item then
+                                    CurrReport.Break();
+
+                                BOMComponent.SetRange("Parent Item No.", "Sales Line"."No.");
+                                if BOMComponent.IsEmpty then
+                                    CurrReport.Break();
+
+                                PDL002_BOMComponent.SetRange(Number, 1, BOMComponent.Count);
+                            end;
+
+                            trigger OnAfterGetRecord()
+                            begin
+                                if PDL002_BOMComponent.Number = 1 then
+                                    BOMComponent.Find('-')
+                                else
+                                    BOMComponent.Next();
+                            end;
+                        }
+
+                        dataitem(DimensionLoop2; "Integer")
+                        {
+                            DataItemTableView = sorting(Number) where(Number = filter(1 ..));
+                            column(DimText_DimensionLoop2; DimText) { }
+                            column(LineDimsCaption; LineDimsCaptionLbl) { }
+
+                            dataitem(PDL002_Oversolds; Integer)
+                            {
+                                DataItemTableView = sorting(Number);
+
+                                column(PDL002_TempSalesLineDocNo; TempSalesLine."Document No.") { }
+                                column(PDL002_TempSalesLineLineNo; TempSalesLine."Line No.") { }
+                                column(PDL002_TempSalesLineItemNo; TempSalesLine."No.") { }
+                                column(PDL002_TempSalesLineDescription; TempSalesLine.Description) { }
+                                column(PDL002_TempSalesLineDescription2; TempSalesLine."Description 2") { }
+                                column(PDL002_TempSalesLineQtytoAssign; TempSalesLine."Qty. to Assign") { }
+                                column(PDL002_TempSalesLineOversoldBarCode; OversoldBarCode) { }
+                                column(PDL002_TempSalesLineUnitPrice; CurrSymbol + Format(TempSalesLine."Unit Price", 0, '<Precision,2:2><Standard Format,0>')) { }
+
+                                trigger OnPreDataItem()
+                                begin
+
+                                    if TempOversoldSalesLine.IsEmpty then
+                                        CurrReport.Break();
+                                    Setrange(Number, 1, TempOversoldSalesLine.Count);
+                                end;
+
+                                trigger OnAfterGetRecord()
+                                var
+                                    OversoldItem: Record Item;
+                                begin
+                                    Clear(OversoldBarcode);
+
+                                    if Number > 1 then
+                                        TempOversoldSalesLine.Next(1);
+
+                                    if TempOversoldSalesLine.Type = TempOversoldSalesLine.Type::Item then
+                                        if OversoldItem.Get(TempSalesLine."No.") then
+                                            OversoldBarcode := GetItemBarCode(OversoldItem."No.", TempSalesLine."Unit of Measure Code");
+                                end;
+                            }
+                            trigger OnAfterGetRecord()
+                            var
+                                DimText2ParametersLbl: label '%1 %2', comment = '%1- Dimension Code  %2 - Dimension Value Code';
+                                DimText3ParametersLbl: label '%1 %2 %3', comment = '%1 - DimText %2- Dimension Code  %3 - Dimension Value Code';
+                            begin
+                                if Number = 1 then begin
+                                    if not DimensionSetEntry2.Find('-') then
+                                        CurrReport.Break();
+                                end else
+                                    if not Continue then
+                                        CurrReport.Break();
+
+                                Clear(DimText);
+                                Continue := false;
+                                repeat
+                                    OldDimText := DimText;
+                                    if DimText = '' then
+                                        //DimText := StrSubstNo(
+                                        //    '%1 %2', DimSetEntry2."Dimension Code", DimSetEntry2."Dimension Value Code")
+                                        DimText := StrSubstNo(DimText2ParametersLbl, DimensionSetEntry1."Dimension Code", DimensionSetEntry1."Dimension Value Code")
+                                    else
+                                        DimText :=
+                                        //  StrSubstNo(
+                                        //    '%1, %2 %3', DimText,
+                                        //    DimSetEntry2."Dimension Code", DimSetEntry2."Dimension Value Code");
+                                        StrSubstNo(DimText3ParametersLbl, DimText, DimensionSetEntry1."Dimension Code", DimensionSetEntry1."Dimension Value Code");
+
+                                    if StrLen(DimText) > MaxStrLen(OldDimText) then begin
+                                        DimText := OldDimText;
+                                        Continue := true;
+                                        exit;
+                                    end;
+                                until (DimensionSetEntry2.Next() = 0);
+                            end;
+
+                            trigger OnPreDataItem()
+                            begin
+                                if not ShowInternalInfo then
+                                    CurrReport.Break();
+
+                                DimensionSetEntry2.SetRange("Dimension Set ID", "Sales Line"."Dimension Set ID");
+                            end;
+
+                        }
+
+                        trigger OnAfterGetRecord()
+                        var
+                            Item: Record Item;
+                        begin
+                            Clear(Barcode);
+                            if Number = 1 then
+                                TempSalesLine.Find('-')
+                            else
+                                TempSalesLine.Next();
+                            "Sales Line" := TempSalesLine;
+
+                            if not "Sales Header"."Prices Including VAT" and
+                               (TempSalesLine."VAT Calculation Type" = TempSalesLine."VAT Calculation Type"::"Full VAT")
+                            then
+                                TempSalesLine."Line Amount" := 0;
+
+                            if (TempSalesLine.Type = TempSalesLine.Type::"G/L Account") and (not ShowInternalInfo) then
+                                "Sales Line"."No." := '';
+
+                            TotalInvoiceDiscAmount += TempSalesLine."Inv. Discount Amount";
+                            TotalLineAmount += TempSalesLine."Line Amount";
+
+                            //Ignore the other records if DateModified or if TempSalesLine.Count is reached
+                            if (DT2Date(TempSalesLine.SystemModifiedAt) < LineModifiedDate) or (i >= c) then
+                                CurrReport.Skip();
+
+                            i += 1;
+
+                            if not "Sales Header"."Prices Including VAT" and
+                               (TempSalesLine."VAT Calculation Type" = TempSalesLine."VAT Calculation Type"::"Full VAT")
+                            then
+                                TempSalesLine."Line Amount" := 0;
+
+                            //OverSold
+                            if "Sales Line".Quantity = 0 then
+                                if EVSSDISalesIntakeSetup.EVS_SDI_OverSoldCancelCode <> '' then
+                                    if "Sales Line".EVS_SDI_SalesIntakeEntries > 0 then begin
+                                        EVSSDISalesIntakeEntry.SetRange(EVS_SDI_DocumentType, EVSSDISalesIntakeEntry.EVS_SDI_DocumentType::Order);
+                                        EVSSDISalesIntakeEntry.SetRange(EVS_SDI_DocumentNo, "Sales Line"."Document No.");
+                                        EVSSDISalesIntakeEntry.SetRange(EVS_SDI_DocumentLineNo, "Sales Line"."Line No.");
+                                        if EVSSDISalesIntakeEntry.EVS_SDI_CancellationCode = EVSSDISalesIntakeSetup.EVS_SDI_OverSoldCancelCode then begin
+                                            TempOversoldSalesLine := "Sales Line";
+                                            TempOversoldSalesLine."Qty. to Assign" := EVSSDISalesIntakeEntry.EVS_SDI_Quantity; //TODO REVIEW  - Use Qty. to Assign as Qty Cancelled -temporary
+                                            TempOversoldSalesLine.Insert();
+                                        end
+                                    end;
+
+                            //if (TempSalesLine.Type = TempSalesLine.Type::"G/L Account") and (not ShowInternalInfo) then
+                            if (TempSalesLine.Type = TempSalesLine.Type::"G/L Account") then
+                                "Sales Line"."No." := '';
+
+                            PDL002_TotalInvoiceDiscAmount += "Sales Line"."Inv. Discount Amount";
+                            PDL002_TotalLineAmount += "Sales Line"."Line Amount";
+
+                            if "Sales Line".Type = "Sales Line".Type::Item then
+                                if Item.Get("Sales Line"."No.") then begin
+                                    NoOfPhotosToDisplay += 1;
+                                    Barcode := GetItemBarCode(Item."No.", "Sales Line"."Unit of Measure Code");
+                                end;
+
+                            if "Sales Line".Quantity > 0 then
+                                SalesUnitPrice := "Sales Line"."Line Amount" / "Sales Line".Quantity
+                            else
+                                SalesUnitPrice := 0;
+                        end;
+
+                        trigger OnPostDataItem()
+                        begin
+                            TempSalesLine.DeleteAll();
+                        end;
+
+                        trigger OnPreDataItem()
+                        begin
+                            MoreLines := TempSalesLine.Find('+');
+                            while MoreLines and (TempSalesLine.Description = '') and (TempSalesLine."Description 2" = '') and
+                                  (TempSalesLine."No." = '') and (TempSalesLine.Quantity = 0) and
+                                  (TempSalesLine.Amount = 0)
+                            do
+                                MoreLines := TempSalesLine.Next(-1) <> 0;
+                            if not MoreLines then
+                                CurrReport.Break();
+
+                            TempSalesLine.SetRange("Line No.", 0, TempSalesLine."Line No.");
+                            PDL002_TotalInvoiceDiscAmount := 0;
+                            PDL002_TotalLineAmount := 0;
+                            i := 0;
+
+                            PDL002PrintOrderManagement.GetPrintOrderKey(TempSalesLine, PrintOrder);
+
+                            SetRange(Number, 1, TempSalesLine.Count);
+                            TotalInvoiceDiscAmount := 0;
+                            TotalLineAmount := 0;
+
+                            Clear(NoOfPhotosToDisplay);
+                        end;
+                    }
+                    dataitem("Integer"; "Integer")
+                    {
+                        DataItemTableView = sorting(Number) where(Number = const(1));
+                        dataitem(VATCounter; "Integer")
+                        {
+                            DataItemTableView = sorting(Number);
+                            column(VATAmountLineVATBase; TempVATAmountLine."VAT Base")
+                            {
+                                AutoFormatExpression = "Sales Header"."Currency Code";
+                                AutoFormatType = 1;
+                            }
+                            column(VATAmountLineVATAmount; TempVATAmountLine."VAT Amount")
+                            {
+                                AutoFormatExpression = "Sales Header"."Currency Code";
+                                AutoFormatType = 1;
+                            }
+                            column(VATAmountLineLineAmount; TempVATAmountLine."Line Amount")
+                            {
+                                AutoFormatExpression = "Sales Header"."Currency Code";
+                                AutoFormatType = 1;
+                            }
+                            column(VATAmtLineInvDiscBaseAmt; TempVATAmountLine."Inv. Disc. Base Amount")
+                            {
+                                AutoFormatExpression = "Sales Header"."Currency Code";
+                                AutoFormatType = 1;
+                            }
+                            column(VATAmtLineInvDiscountAmt; TempVATAmountLine."Invoice Discount Amount")
+                            {
+                                AutoFormatExpression = "Sales Header"."Currency Code";
+                                AutoFormatType = 1;
+                            }
+                            column(VATAmountLineVAT; TempVATAmountLine."VAT %")
+                            {
+                                DecimalPlaces = 0 : 5;
+                            }
+                            column(VATAmtLineVATIdentifier; TempVATAmountLine."VAT Identifier") { }
+                            column(VATPercentCaption; VATPercentCaptionLbl) { }
+                            column(VATBaseCaption; VATBaseCaptionLbl) { }
+                            column(VATAmtCaption; VATAmtCaptionLbl) { }
+                            column(VATAmtSpecCaption; VATAmtSpecCaptionLbl) { }
+                            column(InvDiscBaseAmtCaption; InvDiscBaseAmtCaptionLbl) { }
+                            column(LineAmtCaption; LineAmtCaptionLbl) { }
+                            column(VATIdentCaption; VATIdentCaptionLbl) { }
+                            column(TotalCaption; TotalCaptionLbl) { }
+
+                            trigger OnAfterGetRecord()
+                            begin
+                                TempVATAmountLine.GetLine(Number);
+                            end;
+
+                            trigger OnPreDataItem()
+                            begin
+                                SetRange(Number, 1, TempVATAmountLine.Count);
+                            end;
+                        }
+
+                        trigger OnPreDataItem()
+                        begin
+                            if TempVATAmountLine.Count <= 1 then
+                                CurrReport.Break();
+                        end;
+                    }
+                    dataitem(Total; "Integer")
+                    {
+                        DataItemTableView = sorting(Number) where(Number = const(1));
+                    }
+                    dataitem(Integer2; "Integer")
+                    {
+                        DataItemTableView = sorting(Number) where(Number = const(1));
+                        dataitem(Total2; "Integer")
+                        {
+                            DataItemTableView = sorting(Number) where(Number = const(1));
+                            column(SelltoCustNo_SalesHeader; "Sales Header"."Sell-to Customer No.") { }
+                            column(SelltoCustNo_SalesHeaderCaption; "Sales Header".FieldCaption("Sell-to Customer No.")) { }
+                            column(ShipToAddr8; ShipToAddr[8]) { }
+                            column(ShipToAddr7; ShipToAddr[7]) { }
+                            column(ShipToAddr6; ShipToAddr[6]) { }
+                            column(ShipToAddr5; ShipToAddr[5]) { }
+                            column(ShipToAddr4; ShipToAddr[4]) { }
+                            column(ShipToAddr3; ShipToAddr[3]) { }
+                            column(ShipToAddr2; ShipToAddr[2]) { }
+                            column(ShipToAddr1; ShipToAddr[1]) { }
+                            column(ShiptoAddressCaption; ShiptoAddressCaptionLbl) { }
+                        }
+
+                        trigger OnPreDataItem()
+                        begin
+                            if not ShowShippingAddr then
+                                CurrReport.Break();
+                        end;
+                    }
+
+                    dataitem(PDL002_CustomerComments; "Comment Line")
+                    {
+                        column(PDL002_CustomerComment_No; PDL002_CustomerComments."No.") { }
+                        column(PDL002_CustomerComment_LineNo; PDL002_CustomerComments."Line No.") { }
+                        column(PDL002_CustomerComment; PDL002_CustomerComments.Comment) { }
+
+                        trigger OnPreDataItem()
+                        begin
+                            PDL002_CustomerComments.SetRange("Table Name", PDL002_CustomerComments."Table Name"::Customer);
+                            PDL002_CustomerComments.SetRange("No.", Customer."No.");
+                            PDL002_CustomerComments.SetRange(PDL001_ShowonSO, true);
+                        end;
+                    }
+
+                    dataitem(PDL002_Comments; "Sales Comment Line")
+                    {
+                        DataItemTableView = sorting("Document Type", "No.", "Line No.", "Document Line No.");
+
+                        column(PDL002_Comment; PDL002_Comments.Comment) { }
+                        column(PDL002_Comment_LineNo; PDL002_Comments."Line No.") { }
+                        column(PDL002_Comment_No; PDL002_Comments."No.") { }
+
+                        trigger OnPreDataItem()
+                        begin
+                            SetRange("Document Type", PDL002_Comments."Document Type"::Order);
+                            SetRange("No.", "Sales Header"."No.");
+                            SetRange(PDL001_PrintonOrderCopy, true);
+                        end;
+                    }
+                    dataitem(PDL002_Confirmation; Integer)
+                    {
+                        DataItemTableView = sorting(Number) where(Number = const(1));
+                        column(PDL002_Number; Format(Number)) { }
+                        trigger OnPreDataItem()
+                        begin
+                            if not PrintConfirmation then
+                                CurrReport.Break();
+                        end;
+                    }
+                    dataitem(PDL002_Photographs; Integer)
+                    {
+                        column(PDL002_Photographs_Number; Number) { }
+                        column(PDL002_ItemHashLbl; ItemHashLbl) { }
+                        column(PDL002_QtyLbl; QtyLbl) { }
+                        column(PDL002_PriceLbl; PriceLbl) { }
+                        column(PDL002_AddPictures; AddPictures) { }
+                        column(PDL002_ColumnNo; Format(ColumnNo)) { }
+                        column(PDL002_RecordNo; Format(RecordNo)) { }
+                        column(PDL002_Item2_1_Picture; Item2[1].Picture) { }
+                        column(PDL002_Item2_2_Picture; Item2[2].Picture) { }
+                        column(PDL002_Item2_1_BarcodeImage; Item2[1].PDL001_BarcodeImage) { }
+                        column(PDL002_Item2_2_BarcodeImage; Item2[2].PDL001_BarcodeImage) { }
+                        column(PDL002_PictureLabel_1_1; PictureLabel[1, 1]) { }
+                        column(PDL002_PictureLabel_1_2; PictureLabel[1, 2]) { }
+                        column(PDL002_PictureLabel_1_3; PictureLabel[1, 3]) { }
+                        column(PDL002_PictureLabel_1_4; PictureLabel[1, 4]) { }
+                        column(PDL002_PictureLabel_1_5; PictureLabel[1, 5]) { }
+                        column(PDL002_PictureLabel_1_6; PictureLabel[1, 6]) { }
+                        column(PDL002_PictureLabel_1_7; PictureLabel[1, 7]) { }
+                        column(PDL002_PictureLabel_1_8; PictureLabel[1, 8]) { }
+                        column(PDL002_PictureLabel_1_9; PictureLabel[1, 9]) { }
+                        column(PDL002_PictureLabel_1_10; PictureLabel[1, 10]) { }
+                        column(PDL002_PictureLabel_1_11; PictureLabel[1, 11]) { }
+                        column(PDL002_PictureLabel_1_12; PictureLabel[1, 12]) { }
+                        column(PDL002_PictureLabel_2_1; PictureLabel[2, 1]) { }
+                        column(PDL002_PictureLabel_2_2; PictureLabel[2, 2]) { }
+                        column(PDL002_PictureLabel_2_3; PictureLabel[2, 3]) { }
+                        column(PDL002_PictureLabel_2_4; PictureLabel[2, 4]) { }
+                        column(PDL002_PictureLabel_2_5; PictureLabel[2, 5]) { }
+                        column(PDL002_PictureLabel_2_6; PictureLabel[2, 6]) { }
+                        column(PDL002_PictureLabel_2_7; PictureLabel[2, 7]) { }
+                        column(PDL002_PictureLabel_2_8; PictureLabel[2, 8]) { }
+                        column(PDL002_PictureLabel_2_9; PictureLabel[2, 9]) { }
+                        column(PDL002_PictureLabel_2_10; PictureLabel[2, 10]) { }
+                        column(PDL002_PictureLabel_2_11; PictureLabel[2, 11]) { }
+                        column(PDL002_PictureLabel_2_12; PictureLabel[2, 12]) { }
+
+                        trigger OnPreDataItem()
+                        var
+                            SalesLine: Record "Sales Line";
+                        begin
+                            if not AddPictures then
+                                CurrReport.Break();
+
+                            PDL002PrintOrderManagement.GetPrintOrderKey("Sales Line", PrintOrder);
+
+                            "Sales Line".SetRange(Type, "Sales Line".Type::Item);
+                            "Sales Line".SetFilter(Quantity, '>%1', 0);
+
+                            if not "Sales Line".Find('-') then
+                                CurrReport.Break();
+
+                            Clear(RecordNo);
+                            Clear(ColumnNo);
+                            NoOfColumns := 2;
+                            SalesLine.Copy("Sales Line");
+                            SetRange(Number, 1, SalesLine.Count);
+                        end;
+
+                        trigger OnAfterGetRecord()
+                        begin
+                            if Number > 1 then
+                                "Sales Line".Next();
+
+                            if DT2Date("Sales Line".SystemModifiedAt) < LineModifiedDate then
+                                CurrReport.Skip();
+
+                            RecordNo := RecordNo + 1;
+                            ColumnNo := ColumnNo + 1;
+                            FormatPictureDetails(ColumnNo);
+
+                            if RecordNo = NoOfPhotosToDisplay then begin
+                                for i := ColumnNo + 1 to NoOfColumns do
+                                    Clear(PictureLabel[i]);
+                                ColumnNo := 0;
+                            end else
+                                if ColumnNo = NoOfColumns then
+                                    ColumnNo := 0;
+                        end;
+                    }
+                    dataitem(PDL002_Interaction; Integer)
+                    {
+                        DataItemTableView = sorting(Number);
+
+                        column(PDL002_TermsCondtionsNumber; Format(1)) { }
+                        column(PDL002_TermsCondtions; CompanyInformation.PDL001_TermsandConditions) { }
+                        trigger OnPreDataItem()
+                        begin
+                            SetRange(Number, 1, 1);
+                        end;
+                    }
+
+                    dataitem(PDL002_ShipAddress; Integer)
+                    {
+                        DataItemTableView = sorting(Number);
+
+                        column(PDL002_ShipAddress1; ShipToAddress[1]) { }
+                        column(PDL002_ShipAddress2; ShipToAddress[2]) { }
+                        column(PDL002_ShipAddress3; ShipToAddress[3]) { }
+                        column(PDL002_ShipAddress4; ShipToAddress[4]) { }
+                        column(PDL002_ShipAddress5; ShipToAddress[5]) { }
+                        column(PDL002_ShipAddress6; ShipToAddress[6]) { }
+                        column(PDL002_ShipAddress7; ShipToAddress[7]) { }
+                        column(PDL002_ShipAddress8; ShipToAddress[8]) { }
+
+                        trigger OnPreDataItem()
+                        begin
+                            SetRange(Number, 1, 1);
+                        end;
+
+                        trigger OnAfterGetRecord()
+                        var
+                            FormatAddr: Codeunit "Format Address";
+                            CustAddr: array[8] of Text[100];
+                        begin
+                            Clear(ShipToAddress);
+                            if not FormatAddr.SalesHeaderShipTo(ShipToAddress, CustAddr, "Sales Header") then
+                                CurrReport.Skip();
+                        end;
+                    }
+
+                }
+
+                trigger OnAfterGetRecord()
+                var
+                    SystemSetup: Record PDL001_SystemSetup;
+                    DimensionValue: Record "Dimension Value";
+                    SalesPost: Codeunit "Sales-Post";
+
+                begin
+                    Clear(TempSalesLine);
+                    Clear(SalesPost);
+                    TempVATAmountLine.DeleteAll();
+                    TempSalesLine.DeleteAll();
+                    SalesPost.GetSalesLines("Sales Header", TempSalesLine, 0);
+                    TempSalesLine.CalcVATAmountLines(0, "Sales Header", TempSalesLine, TempVATAmountLine);
+                    TempSalesLine.UpdateVATOnLines(0, "Sales Header", TempSalesLine, TempVATAmountLine);
+                    VATAmount := TempVATAmountLine.GetTotalVATAmount();
+                    VATBaseAmount := TempVATAmountLine.GetTotalVATBase();
+                    VATDiscountAmount :=
+                      TempVATAmountLine.GetTotalVATDiscount("Sales Header"."Currency Code", "Sales Header"."Prices Including VAT");
+                    TotalAmountInclVAT := TempVATAmountLine.GetTotalAmountInclVAT();
+
+                    if Number > 1 then
+                        CopyText := Text003Lbl;
+
+
+                    SystemSetup.Get();
+                    if DimensionValue.Get(SystemSetup.PDL001_Dimension, "Sales Header"."Shortcut Dimension 1 Code") then
+                        DimensionValName := DimensionValue.Name;
+
+                    Clear(TempSalesLine);
+                    Clear(SalesPost);
+                    TempVATAmountLine.DeleteAll();
+                    TempSalesLine.DeleteAll();
+                    SalesPost.GetSalesLines("Sales Header", TempSalesLine, 0);
+                    if LineModifiedDate > 0D then
+                        TempSalesLine.SetFilter(SystemCreatedAt, '>=%1', CREATEDATETIME(LineModifiedDate, 0T));
+                    c := TempSalesLine.Count();
+                    TempSalesLine.CalcVATAmountLines(0, "Sales Header", TempSalesLine, TempVATAmountLine);
+                    TempSalesLine.UpdateVATOnLines(0, "Sales Header", TempSalesLine, TempVATAmountLine);
+
+                    PDL002_VATAmount := TempVATAmountLine.GetTotalVATAmount();
+                    PDL002_VATBaseAmount := TempVATAmountLine.GetTotalVATBase();
+                    PDL002_VATDiscountAmount := TempVATAmountLine.GetTotalVATDiscount("Sales Header"."Currency Code", "Sales Header"."Prices Including VAT");
+                    PDL002_TotalAmountInclVAT := TempVATAmountLine.GetTotalAmountInclVAT();
+
+                    if Number > 1 then
+                        PDL002_CopyText := CopyLbl
+                    else
+                        PDL002_CopyText := '';
+                end;
+
+                trigger OnPostDataItem()
+                begin
+                    if not CurrReport.Preview then
+                        Codeunit.Run(Codeunit::"Sales-Printed", "Sales Header");
+                end;
+
+                trigger OnPreDataItem()
+                begin
+                    NoOfLoops := Abs(NoOfCopiesvar) + 1;
+                    CopyText := '';
+                    SetRange(Number, 1, NoOfLoops);
+                end;
+            }
+
+            trigger OnAfterGetRecord()
+            var
+                Currency: Record Currency;
+                GeneralLedgerSetup: Record "General Ledger Setup";
+                SalesLine2: Record "Sales Line";
+            begin
+                CurrReport.Language := Language1.GetLanguageIdOrDefault("Language Code");
+
+                if not CompanyBankAccount.Get("Sales Header"."Company Bank Account Code") then
+                    CompanyBankAccount.CopyBankFieldsFromCompanyInfo(CompanyInformation);
+
+                if ResponsibilityCenter.Get("Responsibility Center") then begin
+                    FormatAddress.RespCenter(CompanyAddr, ResponsibilityCenter);
+                    CompanyInformation."Phone No." := ResponsibilityCenter."Phone No.";
+                    CompanyInformation."Fax No." := ResponsibilityCenter."Fax No.";
+                end else
+                    FormatAddress.Company(CompanyAddr, CompanyInformation);
+
+                DimensionSetEntry1.SetRange("Dimension Set ID", "Sales Header"."Dimension Set ID");
+
+                if "Salesperson Code" = '' then begin
+                    Clear(SalesPersonPurchaser);
+                    SalesPersonText := '';
+                end else begin
+                    SalesPersonPurchaser.Get("Salesperson Code");
+                    SalesPersonText := Text000Lbl;
+                end;
+                if "VAT Registration No." = '' then
+                    VATNoText := ''
+                else
+                    VATNoText := FieldCaption("VAT Registration No.");
+                if "Currency Code" = '' then begin
+                    GeneralLedgerSetup.Get();
+                    GeneralLedgerSetup.TestField("LCY Code");
+                    TotalText := StrSubstNo(Text001Lbl, GeneralLedgerSetup."LCY Code");
+                    TotalInclVATText := StrSubstNo(Text002Lbl, GeneralLedgerSetup."LCY Code");
+                    TotalExclVATText := StrSubstNo(Text006Lbl, GeneralLedgerSetup."LCY Code");
+                end else begin
+                    TotalText := StrSubstNo(Text001Lbl, "Currency Code");
+                    TotalInclVATText := StrSubstNo(Text002Lbl, "Currency Code");
+                    TotalExclVATText := StrSubstNo(Text006Lbl, "Currency Code");
+                end;
+
+                FormatAddress.SalesHeaderBillTo(CustAddr, "Sales Header");
+
+                if "Payment Terms Code" = '' then
+                    PaymentTerms.Init()
+                else
+                    PaymentTerms.Get("Payment Terms Code");
+                if "Shipment Method Code" = '' then
+                    ShipmentMethod.Init()
+                else
+                    ShipmentMethod.Get("Shipment Method Code");
+
+                if ("VAT Base Discount %" = 0) and ("Payment Discount %" = 0) then
+                    PaymentDiscountText := ''
+                else
+                    PaymentDiscountText :=
+                      StrSubstNo(
+                        Text1041000Lbl,
+                        "Payment Discount %", "VAT Base Discount %");
+
+                ShowShippingAddr := FormatAddress.SalesHeaderShipTo(ShipToAddr, CustAddr, "Sales Header");
+
+                if not CurrReport.Preview then begin
+                    if ArchiveDocumentvar then
+                        ArchiveManagement.StoreSalesDocument("Sales Header", LogInteractionvar);
+
+                    if LogInteractionvar then begin
+                        CalcFields("No. of Archived Versions");
+                        if "Bill-to Contact No." <> '' then
+                            SegManagement.LogDocument(
+                              3, "No.", "Doc. No. Occurrence",
+                              "No. of Archived Versions", DATABASE::Contact, "Bill-to Contact No."
+                              , "Salesperson Code", "Campaign No.", "Posting Description", "Opportunity No.")
+                        else
+                            SegManagement.LogDocument(
+                              3, "No.", "Doc. No. Occurrence",
+                              "No. of Archived Versions", DATABASE::Customer, "Bill-to Customer No.",
+                              "Salesperson Code", "Campaign No.", "Posting Description", "Opportunity No.");
+                    end;
+                end;
+                Clear(CommentsExist);
+                if Customer.Get("Sales Header"."Sell-to Customer No.") then begin
+
+                    Clear(SupplierText);
+                    if Customer."Our Account No." <> '' then
+                        SupplierText := StrSubstNo(SupplierReferenceLbl, Customer."Our Account No.");
+
+                    Clear(DepartmentText);
+                    if Customer.PDL001_CustomerDepartmentNo <> '' then
+                        DepartmentText := StrSubstNo(DepartmentTxtLbl, Customer.PDL001_CustomerDepartmentNo);
+                end;
+
+                GeneralLedgerSetup.Get();
+                if "Sales Header"."Currency Code" = '' then begin
+                    GeneralLedgerSetup.TestField("Local Currency Symbol");
+                    TotalValueText := strsubstno(TotalValueLbl, GeneralLedgerSetup."LCY Code");
+                    TotalIncludingVATText := strsubstno(TotalIncVATLbl, GeneralLedgerSetup."LCY Code");
+                    TotalExcludingVATText := strsubstno(TotalExclVATLbl, GeneralLedgerSetup."LCY Code");
+                    CurrSymbol := GeneralLedgerSetup."Local Currency Symbol"
+                end else begin
+                    TotalValueText := strsubstno(TotalValueLbl, "Sales Header"."Currency Code");
+                    TotalIncludingVATText := strsubstno(TotalIncVATLbl, "Sales Header"."Currency Code");
+                    TotalExcludingVATText := strsubstno(TotalExclVATLbl, "Sales Header"."Currency Code");
+                    if Currency.Get("Sales Header"."Currency Code") then
+                        CurrSymbol := Currency.Symbol;
+                end;
+
+                Clear(HeaderDiscTxt);
+                SalesLine2.Reset();
+                SalesLine2.SetRange("Document Type", "Sales Header"."Document Type");
+                SalesLine2.SetRange("Document No.", "Sales Header"."No.");
+                SalesLine2.SetFilter("Line Discount %", '<>%1', 0);
+                if not SalesLine2.IsEmpty then
+                    HeaderDiscTxt := HeaderDiscLbl;
+
+                CheckExternalOrder();
+
+                CheckEORIPrinting();
+
+                CheckIncoterms();
+
+                if not EVSESFTakenAt.Get("Sales Header".EVS_ESF_TakenAtCode) then
+                    Clear(EVS_ESF_TakenAtCode);
+
+            end;
+        }
+    }
+
+    requestpage
+    {
+        SaveValues = true;
+
+        layout
+        {
+            area(content)
+            {
+                group(Options)
+                {
+                    Caption = 'Options';
+                    field(NoOfCopies; NoOfCopiesvar)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        Caption = 'No. of Copies';
+                        ToolTip = 'Specifies how many copies of the document to print.';
+                    }
+                    field(ShowInternalInformation; ShowInternalInfo)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        Caption = 'Show Internal Information';
+                        ToolTip = 'Specifies if you want the printed report to show information that is only for internal use.';
+                    }
+                    field(ArchiveDocument; ArchiveDocumentvar)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        Caption = 'Archive Document';
+                        Enabled = ArchiveDocumentEnable;
+                        ToolTip = 'Specifies if the document is archived after you print it.';
+
+                        trigger OnValidate()
+                        begin
+                            if not ArchiveDocumentvar then
+                                LogInteractionvar := false;
+                        end;
+                    }
+                    field(LogInteraction; LogInteractionvar)
+                    {
+                        ApplicationArea = Basic, Suite;
+                        Caption = 'Log Interaction';
+                        Enabled = LogInteractionEnable;
+                        ToolTip = 'Specifies if you want the program to log this interaction.';
+
+                        trigger OnValidate()
+                        begin
+                            if LogInteractionvar then
+                                ArchiveDocumentvar := ArchiveDocumentEnable;
+                        end;
+                    }
+                    field(PDL002_PrintConfirmation; PrintConfirmation)
+                    {
+                        Caption = 'Print Confirmation';
+                        ApplicationArea = All;
+                        Enabled = true;
+                        ToolTip = 'Specifies if the user wants to display that section of the report.';
+                    }
+                    field(PDL002_AddPictures; AddPictures)
+                    {
+                        Caption = 'Add Pictures';
+                        ApplicationArea = All;
+                        Enabled = true;
+                        ToolTip = 'Specifies if the user wants to display that section of the report.';
+                    }
+                    field(PDL002_PrintOrder; PrintOrder)
+                    {
+                        Caption = 'Print Order';
+                        ApplicationArea = All;
+                        Enabled = true;
+                        ToolTip = 'Specifies what order the lines are to be shown on the document.';
+                    }
+                    field(PDL002_LineModifiedDate; LineModifiedDate)
+                    {
+                        Caption = 'Modified Date';
+                        ApplicationArea = All;
+                        Enabled = true;
+                        ToolTip = 'Specifies the modified date.';
+                    }
+                    field(DisplayAsmInformation; DisplayAssemblyInformation)
+                    {
+                        ApplicationArea = Assembly;
+                        Caption = 'Show Assembly Components';
+                        ToolTip = 'Specifies if you want the report to include information about components that were used in linked assembly orders that supplied the item(s) being sold. (Only possible for RDLC report layout.)';
+                    }
+                }
+            }
+        }
+
+        actions
+        {
+        }
+
+        trigger OnInit()
+        var
+        begin
+            LogInteractionEnable := true;
+            ArchiveDocumentEnable := true;
+        end;
+
+        trigger OnOpenPage()
+        begin
+            ArchiveDocumentvar := SalesReceivablesSetup."Archive Orders";
+            LogInteractionvar := SegManagement.FindInteractTmplCode(3) <> '';
+
+            ArchiveDocumentEnable := ArchiveDocumentvar;
+            LogInteractionEnable := LogInteractionvar;
+        end;
+    }
+
+    labels
+    {
+    }
+
+
+    trigger OnInitReport()
+    begin
+        GeneralLedgerSetup.Get();
+        CompanyInformation.Get();
+        SalesReceivablesSetup.Get();
+        CompanyInformation.CalcFields(Picture);
+        EVSSDISalesIntakeSetup.Get();
+
+        case SalesReceivablesSetup."Logo Position on Documents" of
+            SalesReceivablesSetup."Logo Position on Documents"::"No Logo":
+                ;
+            SalesReceivablesSetup."Logo Position on Documents"::Left:
+                begin
+                    CompanyInformation3.Get();
+                    CompanyInformation3.CalcFields(Picture);
+                end;
+            SalesReceivablesSetup."Logo Position on Documents"::Center:
+                begin
+                    CompanyInformation1.Get();
+                    CompanyInformation1.CalcFields(Picture);
+                end;
+            SalesReceivablesSetup."Logo Position on Documents"::Right:
+                begin
+                    CompanyInformation2.Get();
+                    CompanyInformation2.CalcFields(Picture);
+                end;
+        end;
+    end;
+
+    var
+
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        ShipmentMethod: Record "Shipment Method";
+        PaymentTerms: Record "Payment Terms";
+        SalesPersonPurchaser: Record "Salesperson/Purchaser";
+        CompanyBankAccount: Record "Bank Account";
+        CompanyInformation: Record "Company Information";
+        CompanyInformation1: Record "Company Information";
+        CompanyInformation3: Record "Company Information";
+        CompanyInformation2: Record "Company Information";
+        SalesReceivablesSetup: Record "Sales & Receivables Setup";
+        TempVATAmountLine: Record "VAT Amount Line" temporary;
+        TempSalesLine: Record "Sales Line" temporary;
+        DimensionSetEntry1: Record "Dimension Set Entry";
+        DimensionSetEntry2: Record "Dimension Set Entry";
+        ResponsibilityCenter: Record "Responsibility Center";
+        RCompanyInformation: Record "Company Information";
+        TempOversoldSalesLine: Record "Sales Line" temporary;
+        Item2: array[2] of Record Item;
+        ItemVar: array[2] of Record "Item Variant";
+        Customer: Record Customer;
+        EVSTRMIncoterms: Record EVS_TRM_Incoterms;
+        CommentLine: Record "Comment Line";
+        SalesCommentLine: Record "Sales Comment Line";
+        TempEVSBARTempBarcode: Record EVS_BAR_TempBarcode temporary;
+        EVSDBCMessageHeader: Record EVS_DBC_MessageHeader;
+        EVSSDISalesIntakeSetup: Record EVS_SDI_SalesIntakeSetup;
+        EVSSDISalesIntakeEntry: Record EVS_SDI_SalesIntakeEntry;
+        EVSESFTakenAt: Record EVS_ESF_TakenAt;
+        BOMComponent: Record "BOM Component";
+        Language1: Codeunit Language;
+        FormatAddress: Codeunit "Format Address";
+        SegManagement: Codeunit SegManagement;
+        ArchiveManagement: Codeunit ArchiveManagement;
+        EVSBARBarcodeImageManagement: Codeunit EVS_BAR_BarcodeImageManagement;
+        PDL002PrintOrderManagement: Codeunit PDL002_PrintOrderManagement;
+        CustAddr: array[8] of Text[100];
+        ShipToAddr: array[8] of Text[100];
+        CompanyAddr: array[8] of Text[100];
+        SalesPersonText: Text;
+        VATNoText: Text;
+        TotalText: Text;
+        TotalExclVATText: Text;
+        TotalInclVATText: Text;
+        PaymentDiscountText: Text;
+        MoreLines: Boolean;
+        NoOfCopiesvar: Integer;
+        NoOfLoops: Integer;
+        CopyText: Text;
+        ShowShippingAddr: Boolean;
+        DimText: Text;
+        OldDimText: Text;
+        ShowInternalInfo: Boolean;
+        Continue: Boolean;
+        ArchiveDocumentvar: Boolean;
+        LogInteractionvar: Boolean;
+        VATAmount: Decimal;
+        VATBaseAmount: Decimal;
+        SalesUnitPrice: Decimal;
+        VATDiscountAmount: Decimal;
+        TotalAmountInclVAT: Decimal;
+        Text1041000Lbl: label '%1 %, VAT discounted at %2 %', comment = '%1- %2-';
+        TotalInvoiceDiscAmount: Decimal;
+        TotalLineAmount: Decimal;
+        [InDataSet]
+        ArchiveDocumentEnable: Boolean;
+        [InDataSet]
+        LogInteractionEnable: Boolean;
+        Text000Lbl: label 'Salesperson';
+        Text001Lbl: label 'Total %1', comment = '%1 - Total Value';
+        Text002Lbl: label 'Total %1 Incl. VAT', comment = '%1 - Total';
+        Text003Lbl: label 'COPY';
+        Text004Lbl: label 'Order Confirmation%1', comment = '%1 - Addtional Text';
+        Text005Lbl: label 'Page %1', comment = '%1 - Page Number';
+        Text006Lbl: label 'Total %1 Excl. VAT', comment = '%1 - Total Value';
+        InvDiscAmtCaptionLbl: label 'Invoice Discount Amount';
+        DocDateCaptionLbl: label 'Document Date';
+        EmailCaptionLbl: label 'E-Mail';
+        HomePageCaptionLbl: label 'Home Page';
+        PhoneNoCaptionLbl: label 'Phone No.';
+        VATRegNoCaptionLbl: label 'VAT Reg. No.';
+        BankNameCaptionLbl: label 'Bank';
+        BankAccNoCaptionLbl: label 'Account No.';
+        ShpDateCaptionLbl: label 'Shipment Date';
+        OrderNoCaptionLbl: label 'Order No.';
+        BankBranchNoCaptionLbl: label 'Bank Branch No.';
+        PaymentTermsCaptionLbl: label 'Payment Terms';
+        ShpMethodCaptionLbl: label 'Shipment Method';
+        PaymentDiscountCaptionLbl: label 'Payment Discount';
+        HdrDimsCaptionLbl: label 'Header Dimensions';
+        UnitPriceCaptionLbl: label 'Unit Price';
+        DiscountPercentCaptionLbl: label 'Discount %';
+        AmtCaptionLbl: label 'Amount';
+        SubtotalCaptionLbl: label 'Subtotal';
+        PaymentDiscountVATCaptionLbl: label 'Payment Discount on VAT';
+        LineDimsCaptionLbl: label 'Line Dimensions';
+        VATPercentCaptionLbl: label 'VAT %';
+        VATBaseCaptionLbl: label 'VAT Base';
+        VATAmtCaptionLbl: label 'VAT Amount';
+        VATAmtSpecCaptionLbl: label 'VAT Amount Specification';
+        InvDiscBaseAmtCaptionLbl: label 'Invoice Discount Base Amount';
+        LineAmtCaptionLbl: label 'Line Amount';
+        VATIdentCaptionLbl: label 'VAT Identifier';
+        TotalCaptionLbl: label 'Total';
+        ShiptoAddressCaptionLbl: label 'Ship-to Address';
+        LineModifiedFlag: Boolean;
+        CommentsExist: Boolean;
+        DimensionValName: Code[50];
+        Barcode: Code[50];
+        OversoldBarcode: Code[50];
+        CustEORINumber: Code[40];
+        ItemVarDesc: Text[100];
+        ItemVarDesc2: Text[50];
+        TotalValueText: Text[50];
+        IncotermsText: Text[100];
+        SupplierText: Text[100];
+        DepartmentText: Text[100];
+        PDL002_VATAmount: Decimal;
+        PDL002_VATBaseAmount: Decimal;
+        PDL002_VATDiscountAmount: Decimal;
+        PDL002_TotalAmountInclVAT: Decimal;
+        PDL002_TotalInvoiceDiscAmount: Decimal;
+        PDL002_TotalLineAmount: Decimal;
+        PDL002_CopyText: Text;
+        TotalIncludingVATText: Text[50];
+        TotalExcludingVATText: Text[50];
+        HeaderDiscTxt: Text[10];
+        CustEORITxt: Text[30];
+        IncotermsLblCaptionLbl: label 'Incoterms';
+        IncotermsCaption: Text[10];
+        RemoteAckTxt: Text;
+        OrderNoLbl: label 'Order No.';
+        TelLbl: label 'Tel : ';
+        FaxLbl: label 'Fax : ';
+        REmailCaptionLbl: label 'Email : ';
+        FSCCertificateLbl: label 'FSC Certificate';
+        CustomerOrderNoLbl: label 'Customer Order No.';
+        OrderDateLbl: label 'Order Date';
+        InvoiceAddrLbl: label 'Invoice Address: ';
+        DeliveryAddrLbl: label 'Delivery Address: ';
+        DeliveryRequestedLbl: label 'Delivery Requested From: ';
+        DepartmentLbl: label 'Department Code';
+        SalespersonCaptionLbl: label 'Salesperson';
+        AppliesToLbl: label 'AppliesTo';
+        NumberLbl: label 'Number';
+        YourRefLbl: label 'Your Ref';
+        CatalogPageNoLbl: label 'Catalog Page No.';
+        ItemNoCaptionLbl: label 'Item No.';
+        DescColourLbl: label 'Description and Colour';
+        BarcodeLbl: label 'Barcode';
+        OrderQtyLbl: label 'Order Qty';
+        UnitPriceLbl: label 'Unit Price';
+        AmountLbl: label 'Amount';
+        RevisedPriceLbl: label 'Revised Price';
+        RevisedUnitPriceLbl: label 'Revised Unit Price';
+        CBMLbl: label 'CBM';
+        TotalCBMLbl: label 'Total CBM';
+        SetComprisedLbl: label 'The above Item is a set comprising the following components:';
+        ClassificationLbl: label 'Classification';
+        CarriedForwardLbl: label 'Carried Forward';
+        PaymentTermsLbl: label 'Payment Terms';
+        AllPricesVATLbl: label 'All prices shown are exclusive of VAT.';
+        ConsigNetValueLbl: label 'Consignments of net value less than %1 may be subject to carriage charge.', Comment = '%1 - + CurrSymbol + CarriageLimit ';
+        AckOrderLbl: label 'This acknowledgement of order is subject to the standard terms and conditions of %1.', Comment = '%1 - CompanyInfo.Name';
+        CopiesLbl: label 'Copies of which are available on request.';
+        AllgoodsSuppliedLbl: label 'All goods supplied to the standard conditions of supply unless otherwise stated in writing.';
+        PrintDateTakenByLbl: label 'Print Date :  %1  Taken By: %2  Entered By: %3  Taken At : %4  Tel: %5', Comment = '%1 - Today, %2 - "Sales Header"."Taken By", %3 - "Sales Header"."Entered by", %4 - Taken By Code Description %5 - "Contact Phone No."';
+        PleaseNoteLbl: label '**** Please Note - This Acknowledgement replaces previous (Mobile Sales) acknowledgement number  :  %1', Comment = '%1 - "Sales Header"."Remote Order No."';
+        OutOfStockItemsLbl: label 'Out of Stock Items';
+        NoStockAvailableLbl: label 'Unfortunately, no stock is available to meet the following requested items.';
+        NoteKeptLbl: label 'A note has been kept of these items and should stock become available, they will be added to your order.';
+        CatalogueLbl: label 'Catalogue';
+        OpenOrderLbl: label 'Open Order Summary (Other Unfulfilled Orders)';
+        CustOrderNoLbl: label 'Customer Order No.';
+        OurOrderNoLbl: label 'Our Order No.';
+        OSLinesLbl: label 'O/S Lines';
+        OSValueLbl: label 'O/S Value';
+        VATAmountSpecLbl: label 'VAT Amount Specification';
+        LineAmountLbl: label 'Line Amount';
+        InvDiscBaseAmountLbl: label 'Inv. Disc. Base Amount';
+        InvoiceDiscAmountLbl: label 'Invoice Discount Amount';
+        PaymentDiscLbl: label 'Payment Discount';
+        TypeofSupplyLbl: label 'Type of Supply';
+        ShipMethodLbl: label 'Shipment Method';
+        ForSignatureLbl: label 'For Signature by customer';
+        ConfirmOrderLbl: label 'We confirm that this order is placed by us with %1.', Comment = '%1 -  CompanyInfo.Name';
+        AmendApplicableLbl: label 'Should any amendments be applicable, they are annotated on the order copy and initialled as confirmation.';
+        NameLbl: label 'Name : ';
+        OnBehalfLbl: label 'On behalf of : ';
+        DateLbl: label 'Date : ';
+        PositionLbl: label 'Position : ';
+        SignatureLbl: label 'Signature : ';
+        SignPostFaxLbl: label 'Please sign and return via post or fax to avoid any delay with your delivery.';
+        ForestStewardhipCouncilLbl: label 'Forest Stewardship Council';
+        EORINoLbl: label 'EORI No:';
+        OrderConfirmationLbl: label 'ORDER CONFIRMATION';
+        TotalValueLbl: label 'Total %1', Comment = '%1 - Total Value';
+        TotalIncVATLbl: label 'Total Incl. VAT %1', Comment = '%1 - Total Inc. VAT ';
+        TotalExclVATLbl: label 'Total Excl. VAT %1', Comment = '%1 - Total Excl. VAT ';
+        SupplierReferenceLbl: label 'SUPPLIER REFERENCE No. : %1', Comment = '%1 - Our Account No. ';
+        DepartmentTxtLbl: label 'DEPARTMENT No. : %1', Comment = '%1 - Customer Department No';
+        LineModifiedDate: Date;
+        PrintConfirmation: Boolean;
+        AddPictures: Boolean;
+        Page_Lbl: label 'Page';
+        CopyLbl: label ' -  COPY';
+        ProformaInvoiceLbl: label ' PROFORMA INVOICE';
+        PaymentDetailsLbl: label 'Payment Details';
+        BankNameLbl: label 'Bank Name';
+        SWIFTNoLbl: label 'SWIFT No.';
+        InvoiceNoLbl: label 'Invoice No.';
+        IBANLbl: label 'IBAN';
+        CartonQtyLbl: label 'Carton Qty';
+        SurchargeLbl: label 'Surcharge';
+        TotalCartonsLbl: label 'Total Cartons : ';
+        PleaseMakePaymentsLbl: label 'Please make payments to this bank account';
+        ItemHashLbl: label 'Item #';
+        QtyLbl: label 'Qty';
+        PriceLbl: label 'Price';
+        HeaderDiscLbl: label 'Disc. %';
+        RemoteAckLbl: label '**** Please Note - This Acknowledgement replaces previous (Mobile Sales) acknowledgement number  :  %1', Comment = ' %1 -  "Sales Header"."Remote Order No."';
+        AssembyComponentLbl: label 'The above Item is a set comprising the following components:';
+        c: Integer;
+        i: Integer;
+        RecordNo: Integer;
+        ColumnNo: Integer;
+        NoOfPhotosToDisplay: Integer;
+        NoOfColumns: Integer;
+        PictureLabel: array[2, 12] of Text[100];
+        ShipToAddress: array[8] of Text[100];
+        CurrSymbol: Code[10];
+        PrintOrder: Enum PDL001_PrintOrder;
+        DisplayAssemblyInformation: Boolean;
+
+    procedure SetOrderType(NewPrintOrder: enum PDL001_PrintOrder);
+    begin
+        PrintOrder := NewPrintOrder;
+    end;
+
+    local procedure CheckEORIPrinting();
+    var
+        lShipToAddress: Record "Ship-to Address";
+    begin
+        Clear(CustEORINumber);
+        CustEORITxt := 'Consignee EORI';
+        if lShipToAddress.Get(Customer."No.", "Sales Header"."Ship-to Code") then
+            if ((lShipToAddress."Country/Region Code" <> '') or (copystr(lShipToAddress."Post Code", 1, 2) = 'BT')) and
+                (lShipToAddress."PDL001_ShiptoEORINo." <> '') and (lShipToAddress.PDL001_UseShiptoEORINo) then
+                CustEORINumber := lShipToAddress."PDL001_ShiptoEORINo.";
+
+        if CustEORINumber = '' then
+            if (("Sales Header"."Ship-to Country/Region Code" <> '') or (copystr("Sales Header"."Ship-to Post Code", 1, 2) = 'BT')) and
+               (Customer."EORI Number" <> '') and (Customer.PDL001_PrintEORIonDocuments) then
+                CustEORINumber := Customer."EORI Number";
+
+        if CustEORINumber = '' then
+            Clear(CustEORITxt);
+    end;
+
+    local procedure CheckExternalOrder()
+    var
+        EVSDBCLastProcessType: Enum EVS_DBC_ProcessTypeEnum;
+    begin
+        Clear(RemoteAckTxt);
+        EVSDBCMessageHeader.SetRange(EVS_DBC_EntityDocumentNo, "Sales Header"."No.");
+        EVSDBCMessageHeader.SetRange(EVS_DBC_EntityTableNo, Database::"Sales Header");
+        EVSDBCMessageHeader.SetRange(EVS_DBC_LastProcessTypeEnum, EVSDBCLastProcessType::ImportSalesDocument_I);
+        if EVSDBCMessageHeader.Findfirst() then
+            RemoteAckTxt := StrSubstNo(RemoteAckLbl, EVSDBCMessageHeader.EVS_DBC_MessageHeaderID);
+    end;
+
+    local procedure CheckIncoterms()
+    var
+        lShipToAddress: Record "Ship-to Address";
+    begin
+        Clear(IncotermsCaption);
+        Clear(IncotermsText);
+
+        if not lShipToAddress.Get(Customer."No.", "Sales Header"."Ship-to Code") then begin
+            if "Sales Header"."Ship-to Country/Region Code" = '' then
+                exit;
+        end else
+            if (lShipToAddress."Country/Region Code" = '') and (not lShipToAddress."PDL001_ShowIncotermsoncDocs") then
+                exit;
+        if "Sales Header".EVS_TRM_IncotermsCode <> '' then
+            if EVSTRMIncoterms.Get("Sales Header".EVS_TRM_IncotermsCode) then begin
+                IncotermsCaption := IncotermsLblCaptionLbl;
+                IncotermsText := EVSTRMIncoterms.EVS_TRM_Description;
+            end;
+    end;
+
+    local procedure DoCommentsExist(): Boolean
+    begin
+        CommentLine.SetRange("Table Name", CommentLine."Table Name"::Customer);
+        CommentLine.SetRange("No.", Customer."No.");
+        CommentLine.SetRange(PDL001_ShowonSO, true);
+        if not CommentLine.IsEmpty then
+            exit(true);
+        SalesCommentLine.SetRange("Document Type", SalesCommentLine."Document Type"::Order);
+        SalesCommentLine.SetFilter("No.", "Sales Header"."No.");
+        SalesCommentLine.SetRange(PDL001_PrintOnOrderCopy, true);
+        if not SalesCommentLine.IsEmpty then
+            exit(true);
+    end;
+
+    local procedure FormatPictureDetails(ColumnNumber: Integer);
+    var
+        BarCodeNo: Code[50];
+        PictureInStream: InStream;
+        BarcodeType: Enum EVS_BAR_ZxingType;
+    begin
+        Clear(PictureLabel[ColumnNumber]);
+
+        Item2[ColumnNumber].Get("Sales Line"."No.");
+        Clear(ItemVar[ColumnNumber]);
+        if "Sales Line"."Variant Code" <> '' then
+            ItemVar[ColumnNumber].Get(Item2[ColumnNumber]."No.", "Sales Line"."Variant Code");
+
+        Clear(PictureLabel[ColumnNumber, 1]);
+
+        PictureLabel[ColumnNumber, 1] := 'No Picture Available';
+        PictureLabel[ColumnNumber, 2] := "Sales Line"."No.";
+        PictureLabel[ColumnNumber, 3] := "Sales Line".Description;
+        PictureLabel[ColumnNumber, 4] := "Sales Line"."Description 2";
+        PictureLabel[ColumnNumber, 5] := '';
+        PictureLabel[ColumnNumber, 6] := '';
+        PictureLabel[ColumnNumber, 7] := Format("Sales Line".Quantity);
+        if "Sales Line"."Line Discount %" <> 0 then
+            PictureLabel[ColumnNumber, 8] := Format("Sales Line"."Line Discount %", 0, '<Precision,2:2><Standard Format,0>');
+
+        //Generate the Barcode
+        Clear(TempEVSBARTempBarcode);
+        BarCodeNo := GetItemBarCode("Sales Line"."No.", "Sales Line"."Unit of Measure Code");
+
+        if BarCodeNo <> '' then begin
+            EVSBARBarcodeImageManagement.EVS_BAR_GenerateBarcodeImage(TempEVSBARTempBarcode, BarCodeNo, BarcodeType::EAN13, 10, 10, false);
+            TempEVSBARTempBarcode.CalcFields(EVS_BAR_Barcode_1);
+            TempEVSBARTempBarcode.EVS_BAR_Barcode_1.CreateInStream(PictureInStream);
+            Item2[ColumnNumber].PDL001_BarcodeImage.ImportStream(PictureInStream, 'barcode');
+        end;
+
+        PictureLabel[ColumnNumber, 10] := CurrSymbol + Format("Sales Line"."Unit Price", 0, '<Precision,2:2><Standard Format,0>');
+        PictureLabel[ColumnNumber, 11] := CurrSymbol + Format("Sales Line"."Line Amount", 0, '<Precision,2:2><Standard Format,0>');
+    end;
+
+    local procedure GetItemBarCode(ItemNo: Code[20]; UOMCode: Code[20]): Code[50]
+    var
+        ItemReference: Record "Item Reference";
+    begin
+        ItemReference.SetRange("Reference Type", ItemReference."Reference Type"::"Bar Code");
+        ItemReference.SetRange("Item No.", ItemNo);
+        ItemReference.SetRange("Unit of Measure", UOMCode);
+        if ItemReference.FindFirst() then
+            exit(ItemReference."Reference No.")
+        else
+            exit('');
+    end;
+
+    procedure GetUserNameFromSID(UserSID: GUID): Text[50]
+    var
+        EVOEFLUserHelper: codeunit EVO_EFL_UserHelper;
+    begin
+        exit(EVOEFLUserHelper.GetUserNameBySID(UserSID));
+    end;
+
+    local procedure GetShipToAddressPhoneNo(PassedShipToAddressCode: Code[20]): Text[30]
+    var
+        GetShipToAddress: Record "Ship-to Address";
+    begin
+        if not GetShipToAddress.Get(PassedShipToAddressCode) then
+            Clear(GetShipToAddress);
+        exit(GetShipToAddress."Phone No.");
+    end;
+}
