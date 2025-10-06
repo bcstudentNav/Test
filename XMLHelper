@@ -1,0 +1,419 @@
+codeunit 71129654 EVO_EXS_XMLHelper
+{
+    procedure SelectNodeValueAsText(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager) Result: Text
+    var
+        TempNode: XmlNode;
+    begin
+        if Node.SelectSingleNode(KeyName, NameSpaceManager, TempNode) then
+            exit(TempNode.AsXmlElement().InnerText);
+    end;
+
+    procedure SelectNodeValueAsCode(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager) Result: Code[2048]
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDateTime(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): DateTime
+    var
+        Result: DateTime;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDate(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): Date
+    var
+        Result: Date;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsTime(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): Time
+    var
+        Result: Time;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsInteger(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): Integer
+    var
+        Result: Integer;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsBigInteger(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): BigInteger
+    var
+        Result: BigInteger;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDecimal(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): Decimal
+    var
+        Result: Decimal;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsBoolean(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): Boolean
+    var
+        Result: Boolean;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsXmlElement(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): XmlElement
+    var
+        TempNode: XmlNode;
+    begin
+        Node.SelectSingleNode(KeyName, NameSpaceManager, TempNode);
+        exit(TempNode.AsXmlElement());
+    end;
+
+    procedure SelectNodeValueAsDuration(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager): Duration
+    var
+        Result: Duration;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node, NameSpaceManager));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsText(KeyName: Text; Node: XmlNode): Text
+    var
+        TempNode: XmlNode;
+    begin
+        if Node.SelectSingleNode(KeyName, TempNode) then
+            exit(TempNode.AsXmlElement().InnerText);
+    end;
+
+    procedure SelectNodeValueAsCode(KeyName: Text; Node: XmlNode): Code[2048]
+    var
+        Result: Code[2048];
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDateTime(KeyName: Text; Node: XmlNode): DateTime
+    var
+        Result: DateTime;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDate(KeyName: Text; Node: XmlNode): Date
+    var
+        Result: Date;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsTime(KeyName: Text; Node: XmlNode): Time
+    var
+        Result: Time;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsInteger(KeyName: Text; Node: XmlNode): Integer
+    var
+        Result: Integer;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsBigInteger(KeyName: Text; Node: XmlNode): BigInteger
+    var
+        Result: BigInteger;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDecimal(KeyName: Text; Node: XmlNode): Decimal
+    var
+        Result: Decimal;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsBoolean(KeyName: Text; Node: XmlNode): Boolean
+    var
+        Result: Boolean;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsXmlElement(KeyName: Text; Node: XmlNode): XmlElement
+    var
+        TempNode: XmlNode;
+        Result: XmlElement;
+    begin
+        Node.SelectSingleNode(KeyName, TempNode);
+        Result := TempNode.AsXmlElement();
+        exit(Result);
+    end;
+
+    procedure SelectNodeValueAsDuration(KeyName: Text; Node: XmlNode): Duration
+    var
+        Result: Duration;
+    begin
+        Evaluate(Result, SelectNodeValueAsText(KeyName, Node));
+        exit(Result);
+    end;
+
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Text): Boolean
+    var
+        TempNode: XmlNode;
+    begin
+        if Node.SelectSingleNode(KeyName, NameSpaceManager, TempNode) then begin
+            Result := CopyStr(TempNode.AsXmlElement().InnerText, 1, MaxStrLen(Result));
+            exit(Result <> '');
+        end;
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Text; MaxLength: Integer): Boolean
+    var
+        TempNode: XmlNode;
+    begin
+        if MaxLength = 0 then
+            MaxLength := MaxStrLen(Result);
+
+        if Node.SelectSingleNode(KeyName, NameSpaceManager, TempNode) then begin
+            Result := CopyStr(TempNode.AsXmlElement().InnerText, 1, MaxLength);
+            exit(Result <> '');
+        end;
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Code[2048]): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, CopyStr(RetValue, 1, MaxStrLen(Result))));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Code[2048]; MaxLength: Integer): Boolean
+    var
+        RetValue: Text;
+    begin
+        if MaxLength = 0 then
+            MaxLength := MaxStrLen(Result);
+
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, CopyStr(RetValue, 1, MaxLength)));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: DateTime): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Date): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Time): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Integer): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: BigInteger): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Decimal): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Boolean): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: XmlElement): Boolean
+    var
+        TempNode: XmlNode;
+    begin
+        if Node.SelectSingleNode(KeyName, NameSpaceManager, TempNode) then begin
+            Result := TempNode.AsXmlElement();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; NameSpaceManager: XmlNamespaceManager; var Result: Duration): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, NameSpaceManager, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Text): Boolean
+    var
+        TempNode: XmlNode;
+    begin
+        if Node.SelectSingleNode(KeyName, TempNode) then begin
+            Result := CopyStr(TempNode.AsXmlElement().InnerText, 1, MaxStrLen(Result));
+            exit(Result <> '');
+        end;
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Text; MaxLength: Integer): Boolean
+    var
+        TempNode: XmlNode;
+    begin
+        if MaxLength = 0 then
+            MaxLength := MaxStrLen(Result);
+
+        if Node.SelectSingleNode(KeyName, TempNode) then begin
+            Result := CopyStr(TempNode.AsXmlElement().InnerText, 1, MaxLength);
+            exit(Result <> '');
+        end;
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Code[2048]): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, CopyStr(RetValue, 1, MaxStrLen(Result))));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Code[2048]; MaxLength: Integer): Boolean
+    var
+        RetValue: Text;
+    begin
+        if MaxLength = 0 then
+            MaxLength := MaxStrLen(Result);
+
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, CopyStr(RetValue, 1, MaxLength)));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: DateTime): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Date): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Time): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Integer): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: BigInteger): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Decimal): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Boolean): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: XmlElement): Boolean
+    var
+        TempNode: XmlNode;
+    begin
+        if Node.SelectSingleNode(KeyName, TempNode) then begin
+            Result := TempNode.AsXmlElement();
+            exit(true);
+        end;
+    end;
+
+    procedure TrySelectNodeValue(KeyName: Text; Node: XmlNode; var Result: Duration): Boolean
+    var
+        RetValue: Text;
+    begin
+        if TrySelectNodeValue(KeyName, Node, RetValue) then
+            exit(Evaluate(Result, RetValue));
+    end;
+
+    procedure GetRootNamepaceUri(Document: XmlDocument): Text
+    var
+        RootElement: XmlElement;
+    begin
+        Document.GetRoot(RootElement);
+        exit(RootElement.NamespaceUri);
+    end;
+}
