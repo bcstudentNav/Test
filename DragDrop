@@ -1,0 +1,189 @@
+codeunit 71129619 EVO_EFL_DragAndDrop
+{
+    procedure AddFileAsDocumentAttachment(TableId: Integer; AttachmentDocumentType: Integer; No: Code[20]; LineNo: Integer; VATReportConfigCode: Integer; FileEncodedAsBase64: Text; Filename: Text)
+    var
+        DocumentAttachment: Record "Document Attachment";
+        TempBlob: Codeunit "Temp Blob";
+        Base64Convert: Codeunit "Base64 Convert";
+        FileManagement: Codeunit "File Management";
+        AttachmentOutStream: OutStream;
+        AttachmentInStream: InStream;
+    begin
+        TempBlob.CreateOutStream(AttachmentOutStream);
+        Base64Convert.FromBase64(FileEncodedAsBase64, AttachmentOutStream);
+        if not TempBlob.HasValue() then
+            Error('');
+
+        TempBlob.CreateInStream(AttachmentInStream);
+
+        DocumentAttachment.Init();
+        DocumentAttachment.Validate("File Extension", FileManagement.GetExtension(Filename));
+        DocumentAttachment.Validate("File Name", CopyStr(FileManagement.GetFileNameWithoutExtension(Filename), 1, MaxStrLen(DocumentAttachment."File Name")));
+        DocumentAttachment."Document Reference ID".ImportStream(AttachmentInStream, '');
+        if not DocumentAttachment."Document Reference ID".HasValue then
+            Error('');
+
+        DocumentAttachment."Table ID" := TableId;
+        DocumentAttachment."No." := No;
+        DocumentAttachment."Document Type" := Enum::"Document Attachment File Type".FromInteger(AttachmentDocumentType);
+        DocumentAttachment."Line No." := LineNo;
+        if VATReportConfigCode <> 0 then
+            DocumentAttachment."VAT Report Config. Code" := Enum::"VAT Report Configuration".FromInteger(VATReportConfigCode);
+
+        case TableId of
+            Database::Item,
+            Database::Customer,
+            Database::Vendor:
+                SetDocumentFlow(DocumentAttachment);
+        end;
+
+        DocumentAttachment_OnBeforeInsert(DocumentAttachment);
+        DocumentAttachment.Insert(true);
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure DocumentAttachment_OnBeforeInsert(var DocumentAttachment: Record "Document Attachment")
+    begin
+    end;
+
+    procedure AddFileAsDocumentAttachment(var DocumentAttachment: Record "Document Attachment"; FileEncodedAsBase64: Text; Filename: Text)
+    var
+        // Standard OOTB document attachment options provided by Microsoft
+        Customer: Record Customer;
+        Vendor: Record Vendor;
+        Item: Record Item;
+        Employee: Record Employee;
+        FixedAsset: Record "Fixed Asset";
+        Resource: Record Resource;
+        SalesHeader: Record "Sales Header";
+        PurchaseHeader: Record "Purchase Header";
+        Job: Record Job;
+        SalesCrMemoHeader: Record "Sales Cr.Memo Header";
+        SalesInvoiceHeader: Record "Sales Invoice Header";
+        PurchInvHeader: Record "Purch. Inv. Header";
+        PurchCrMemoHdr: Record "Purch. Cr. Memo Hdr.";
+        VATReportHeader: Record "VAT Report Header";
+
+        // BCN additions
+        CustLedgerEntry: Record "Cust. Ledger Entry";
+        VendorLedgerEntry: Record "Vendor Ledger Entry";
+        Contact: Record Contact;
+        SalespersonPurchaser: Record "Salesperson/Purchaser";
+        SalesShipmentHeader: Record "Sales Shipment Header";
+        PurchRcptHeader: Record "Purch. Rcpt. Header";
+        ReturnShipmentHeader: Record "Return Shipment Header";
+        ReturnReceiptHeader: Record "Return Receipt Header";
+
+        TableId: Integer;
+        DocumentType: Integer;
+        LineNo: Integer;
+        RecNo: Code[20];
+    begin
+        case DocumentAttachment."Table ID" of
+
+            // Standard OOTB options provided by Microsoft
+            Database::Customer:
+                if Customer.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Customer, 0, Customer."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::Vendor:
+                if Vendor.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Vendor, 0, Vendor."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::Item:
+                if Item.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Item, 0, Item."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::Employee:
+                if Employee.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Employee, 0, Employee."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Fixed Asset":
+                if FixedAsset.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Fixed Asset", 0, FixedAsset."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::Resource:
+                if FixedAsset.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Resource, 0, Resource."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Sales Header":
+                if SalesHeader.Get(DocumentAttachment."Document Type", DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Sales Header", SalesHeader."Document Type".AsInteger(), SalesHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Purchase Header":
+                if PurchaseHeader.Get(DocumentAttachment."Document Type", DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Purchase Header", PurchaseHeader."Document Type".AsInteger(), PurchaseHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::Job:
+                if Job.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Job, 0, Job."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Sales Cr.Memo Header":
+                if SalesCrMemoHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Sales Cr.Memo Header", 0, SalesCrMemoHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Sales Invoice Header":
+                if SalesInvoiceHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Sales Invoice Header", 0, SalesInvoiceHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Purch. Inv. Header":
+                if PurchInvHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Purch. Inv. Header", 0, PurchInvHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Purch. Cr. Memo Hdr.":
+                if PurchCrMemoHdr.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Purch. Cr. Memo Hdr.", 0, PurchCrMemoHdr."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"VAT Report Header":
+                if VATReportHeader.Get(DocumentAttachment."VAT Report Config. Code", DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"VAT Report Header", 0, VATReportHeader."No.", 0, VATReportHeader."VAT Report Config. Code".AsInteger(), FileEncodedAsBase64, Filename);
+
+            // BCN additions
+            Database::"Cust. Ledger Entry":
+                if CustLedgerEntry.Get(DocumentAttachment."Line No.") then
+                    AddFileAsDocumentAttachment(Database::"Cust. Ledger Entry", 0, CustLedgerEntry."Document No.", CustLedgerEntry."Entry No.", 0, FileEncodedAsBase64, Filename);
+            Database::"Vendor Ledger Entry":
+                if VendorLedgerEntry.Get(DocumentAttachment."Line No.") then
+                    AddFileAsDocumentAttachment(Database::"Vendor Ledger Entry", 0, VendorLedgerEntry."Document No.", VendorLedgerEntry."Entry No.", 0, FileEncodedAsBase64, Filename);
+            Database::Contact:
+                if Contact.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::Contact, 0, Contact."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Salesperson/Purchaser":
+                if SalespersonPurchaser.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Salesperson/Purchaser", 0, SalespersonPurchaser.Code, 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Sales Shipment Header":
+                if SalesShipmentHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Sales Shipment Header", 0, SalesShipmentHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Purch. Rcpt. Header":
+                if PurchRcptHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Purch. Rcpt. Header", 0, PurchRcptHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Return Shipment Header":
+                if ReturnShipmentHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Return Shipment Header", 0, ReturnShipmentHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            Database::"Return Receipt Header":
+                if ReturnReceiptHeader.Get(DocumentAttachment."No.") then
+                    AddFileAsDocumentAttachment(Database::"Return Receipt Header", 0, ReturnReceiptHeader."No.", 0, 0, FileEncodedAsBase64, Filename);
+            else begin
+                Clear(TableId);
+                Clear(DocumentType);
+                Clear(LineNo);
+                Clear(RecNo);
+
+                AddFileAsDocumentAttachment_CaseElse(DocumentAttachment, TableId, DocumentType, RecNo, LineNo);
+                if (TableId <> 0) and (RecNo <> '') then
+                    AddFileAsDocumentAttachment(TableId, DocumentType, RecNo, LineNo, 0, FileEncodedAsBase64, Filename);
+            end;
+        end;
+    end;
+
+    [IntegrationEvent(false, false)]
+    local procedure AddFileAsDocumentAttachment_CaseElse(var DocumentAttachment: Record "Document Attachment"; var TableId: Integer; var DocumentType: Integer; var RecNo: Code[20]; var LineNo: Integer)
+    begin
+    end;
+
+    local procedure SetDocumentFlow(var DocumentAttachment: Record "Document Attachment")
+    var
+        EVOEFLEvosoftSetup: Record EVO_EFL_EvosoftSetup;
+    begin
+        EVOEFLEvosoftSetup.Get();
+
+        case DocumentAttachment."Table ID" of
+            Database::Customer:
+                DocumentAttachment."Document Flow Sales" := EVOEFLEvosoftSetup.EVO_EFL_DocumentFlowSales;
+            Database::Vendor:
+                DocumentAttachment."Document Flow Purchase" := EVOEFLEvosoftSetup.EVO_EFL_DocumentFlowPurchase;
+            Database::Item:
+                begin
+                    DocumentAttachment."Document Flow Sales" := EVOEFLEvosoftSetup.EVO_EFL_DocumentFlowSales;
+                    DocumentAttachment."Document Flow Purchase" := EVOEFLEvosoftSetup.EVO_EFL_DocumentFlowPurchase;
+                end;
+        end
+    end;
+}
