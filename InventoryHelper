@@ -1,0 +1,257 @@
+codeunit 71129603 EVO_EFL_InventoryHelper
+{
+    procedure PostInventoryJournal(var EVOEFLInventoryHelperEntry: Record EVO_EFL_InventoryHelperEntry)
+    var
+        Item: Record Item;
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+        ItemVariant: Record "Item Variant";
+        Location: Record Location;
+        NewLocation: Record Location;
+        Bin: Record Bin;
+        NewBin: Record Bin;
+
+        IsMovement: Boolean;
+
+        PostInventoryJournalOnlyOnSameWarehouseTypeErr: Label 'The PostInventoryJournal() method can only be used when both locations have the same directed put-away and pick settings. Please call your support agent for more information and advice on how to resolve this issue.';
+    begin
+        if (EVOEFLInventoryHelperEntry.EVO_EFL_Quantity = 0) then
+            exit;
+
+        if EVOEFLInventoryHelperEntry.EVO_EFL_PostingDate = 0D then
+            EVOEFLInventoryHelperEntry.EVO_EFL_PostingDate := WorkDate();
+
+        Item := GetItem(EVOEFLInventoryHelperEntry.EVO_EFL_ItemNo);
+        ItemUnitOfMeasure := GetItemUnitOfMeasure(EVOEFLInventoryHelperEntry.EVO_EFL_ItemNo, EVOEFLInventoryHelperEntry.EVO_EFL_UnitOfMeasureCode);
+        ItemVariant := GetItemVariant(EVOEFLInventoryHelperEntry.EVO_EFL_ItemNo, EVOEFLInventoryHelperEntry.EVO_EFL_VariantCode);
+
+        Location := GetLocation(EVOEFLInventoryHelperEntry.EVO_EFL_LocationCode);
+        if EVOEFLInventoryHelperEntry.EVO_EFL_NewLocationCode = '' then
+            EVOEFLInventoryHelperEntry.EVO_EFL_NewLocationCode := EVOEFLInventoryHelperEntry.EVO_EFL_LocationCode;
+        NewLocation := GetLocation(EVOEFLInventoryHelperEntry.EVO_EFL_NewLocationCode);
+
+        if Location."Directed Put-away and Pick" <> NewLocation."Directed Put-away and Pick" then
+            Error(PostInventoryJournalOnlyOnSameWarehouseTypeErr);
+
+        Bin := GetBin(EVOEFLInventoryHelperEntry.EVO_EFL_LocationCode, EVOEFLInventoryHelperEntry.EVO_EFL_BinCode);
+        if (EVOEFLInventoryHelperEntry.EVO_EFL_NewLocationCode = EVOEFLInventoryHelperEntry.EVO_EFL_LocationCode) and (EVOEFLInventoryHelperEntry.EVO_EFL_NewBinCode = '') then
+            EVOEFLInventoryHelperEntry.EVO_EFL_NewBinCode := EVOEFLInventoryHelperEntry.EVO_EFL_BinCode;
+        NewBin := GetBin(EVOEFLInventoryHelperEntry.EVO_EFL_NewLocationCode, EVOEFLInventoryHelperEntry.EVO_EFL_NewBinCode);
+
+        if EVOEFLInventoryHelperEntry.EVO_EFL_NewSerialNo = '' then
+            EVOEFLInventoryHelperEntry.EVO_EFL_NewSerialNo := EVOEFLInventoryHelperEntry.EVO_EFL_SerialNo;
+        if EVOEFLInventoryHelperEntry.EVO_EFL_NewLotNo = '' then
+            EVOEFLInventoryHelperEntry.EVO_EFL_NewLotNo := EVOEFLInventoryHelperEntry.EVO_EFL_LotNo;
+        if EVOEFLInventoryHelperEntry.EVO_EFL_NewPackageNo = '' then
+            EVOEFLInventoryHelperEntry.EVO_EFL_NewPackageNo := EVOEFLInventoryHelperEntry.EVO_EFL_PackageNo;
+        if EVOEFLInventoryHelperEntry.EVO_EFL_NewExpirationDate = 0D then
+            EVOEFLInventoryHelperEntry.EVO_EFL_NewExpirationDate := EVOEFLInventoryHelperEntry.EVO_EFL_ExpirationDate;
+
+        IsMovement := (EVOEFLInventoryHelperEntry.EVO_EFL_Quantity > 0) and
+            not ((EVOEFLInventoryHelperEntry.EVO_EFL_NewLocationCode = EVOEFLInventoryHelperEntry.EVO_EFL_LocationCode) and
+                (EVOEFLInventoryHelperEntry.EVO_EFL_NewBinCode = EVOEFLInventoryHelperEntry.EVO_EFL_BinCode) and
+                (EVOEFLInventoryHelperEntry.EVO_EFL_NewSerialNo = EVOEFLInventoryHelperEntry.EVO_EFL_SerialNo) and
+                (EVOEFLInventoryHelperEntry.EVO_EFL_NewLotNo = EVOEFLInventoryHelperEntry.EVO_EFL_LotNo) and
+                (EVOEFLInventoryHelperEntry.EVO_EFL_NewPackageNo = EVOEFLInventoryHelperEntry.EVO_EFL_PackageNo));
+
+        // If directed put-away and pick is utilised, then we need to post a warehouse journal instead of an item journal
+        if not Location."Directed Put-away and Pick" then
+            PostItemJournal(Item, ItemVariant, ItemUnitOfMeasure, Location, Bin, NewBin, EVOEFLInventoryHelperEntry, IsMovement)
+        else
+            PostWarehouseJournal(Item, ItemVariant, ItemUnitOfMeasure, Location, Bin, NewBin, EVOEFLInventoryHelperEntry, IsMovement);
+    end;
+
+    local procedure PostItemJournal(Item: Record Item; ItemVariant: Record "Item Variant"; ItemUnitOfMeasure: Record "Item Unit of Measure"; Location: Record Location; FromBin: Record Bin; ToBin: Record Bin; var EVOEFLInventoryHelperEntry: Record EVO_EFL_InventoryHelperEntry; IsMovement: Boolean)
+    begin
+    end;
+
+    local procedure PostWarehouseJournal(Item: Record Item; ItemVariant: Record "Item Variant"; ItemUnitOfMeasure: Record "Item Unit of Measure"; Location: Record Location; FromBin: Record Bin; ToBin: Record Bin; var EVOEFLInventoryHelperEntry: Record EVO_EFL_InventoryHelperEntry; IsMovement: Boolean)
+    var
+        WarehouseJournalLine: Record "Warehouse Journal Line";
+        AdjustmentBin: Record Bin;
+        WhseJnlRegisterLine: Codeunit "Whse. Jnl.-Register Line";
+    begin
+        WarehouseJournalLine.Init();
+        WarehouseJournalLine."Registering Date" := EVOEFLInventoryHelperEntry.EVO_EFL_PostingDate;
+        WarehouseJournalLine."User ID" := CopyStr(UserId, 1, MaxStrLen(WarehouseJournalLine."User ID"));
+        WarehouseJournalLine."Whse. Document No." := EVOEFLInventoryHelperEntry.EVO_EFL_DocumentNo;
+        WarehouseJournalLine."Whse. Document Type" := WarehouseJournalLine."Whse. Document Type"::"Whse. Journal";
+
+        AdjustmentBin.Get(Location.Code, Location."Adjustment Bin Code");
+
+        // Set the entry type of the warehouse journal line
+        if IsMovement then
+            WarehouseJournalLine."Entry Type" := WarehouseJournalLine."Entry Type"::Movement
+        else
+            if EVOEFLInventoryHelperEntry.EVO_EFL_Quantity > 0 then
+                WarehouseJournalLine."Entry Type" := WarehouseJournalLine."Entry Type"::"Positive Adjmt."
+            else
+                WarehouseJournalLine."Entry Type" := WarehouseJournalLine."Entry Type"::"Negative Adjmt.";
+
+        WarehouseJournalLine."Item No." := Item."No.";
+        WarehouseJournalLine.Description := Item.Description;
+        if ItemVariant.Code <> '' then begin
+            WarehouseJournalLine."Variant Code" := ItemVariant.Code;
+            WarehouseJournalLine.Description := ItemVariant.Description;
+        end;
+
+        WarehouseJournalLine."Location Code" := Location.Code;
+        WarehouseJournalLine."Bin Code" := FromBin.Code;
+
+        // Source location/zone/bin information
+        case WarehouseJournalLine."Entry Type" of
+            WarehouseJournalLine."Entry Type"::Movement:
+                begin
+                    WarehouseJournalLine."Bin Code" := FromBin.Code;
+                    WarehouseJournalLine."Zone Code" := FromBin."Zone Code";
+
+                    WarehouseJournalLine."From Bin Code" := FromBin.Code;
+                    WarehouseJournalLine."From Zone Code" := FromBin."Zone Code";
+                    WarehouseJournalLine."From Bin Type Code" := FromBin."Bin Type Code";
+
+                    WarehouseJournalLine."To Bin Code" := ToBin.Code;
+                    WarehouseJournalLine."To Zone Code" := ToBin."Zone Code";
+                end;
+            WarehouseJournalLine."Entry Type"::"Negative Adjmt.":
+                begin
+                    WarehouseJournalLine."Bin Code" := FromBin.Code;
+                    WarehouseJournalLine."Zone Code" := FromBin."Zone Code";
+
+                    WarehouseJournalLine."From Bin Code" := FromBin.Code;
+                    WarehouseJournalLine."From Zone Code" := FromBin."Zone Code";
+                    WarehouseJournalLine."From Bin Type Code" := FromBin."Bin Type Code";
+
+                    WarehouseJournalLine."To Bin Code" := AdjustmentBin.Code;
+                    WarehouseJournalLine."To Zone Code" := AdjustmentBin."Zone Code";
+                end;
+            WarehouseJournalLine."Entry Type"::"Positive Adjmt.":
+                begin
+                    WarehouseJournalLine."Bin Code" := FromBin.Code;
+                    WarehouseJournalLine."Zone Code" := FromBin."Zone Code";
+
+                    WarehouseJournalLine."From Bin Code" := AdjustmentBin.Code;
+                    WarehouseJournalLine."From Zone Code" := AdjustmentBin."Zone Code";
+                    WarehouseJournalLine."From Bin Type Code" := AdjustmentBin."Bin Type Code";
+
+                    WarehouseJournalLine."To Bin Code" := FromBin.Code;
+                    WarehouseJournalLine."To Zone Code" := FromBin."Zone Code";
+                end;
+        end;
+
+        WarehouseJournalLine.Quantity := EVOEFLInventoryHelperEntry.EVO_EFL_Quantity;
+        WarehouseJournalLine."Unit of Measure Code" := ItemUnitOfMeasure.Code;
+        if EVOEFLInventoryHelperEntry.EVO_EFL_QuantityBase = 0 then
+            WarehouseJournalLine."Qty. (Base)" := EVOEFLInventoryHelperEntry.EVO_EFL_Quantity * ItemUnitOfMeasure."Qty. per Unit of Measure"
+        else
+            WarehouseJournalLine."Qty. (Base)" := EVOEFLInventoryHelperEntry.EVO_EFL_QuantityBase;
+
+        WarehouseJournalLine."Qty. (Absolute)" := Abs(WarehouseJournalLine.Quantity);
+        WarehouseJournalLine."Qty. (Absolute, Base)" := Abs(WarehouseJournalLine."Qty. (Base)");
+
+        // Deal with item tracking
+        if EVOEFLInventoryHelperEntry.EVO_EFL_SerialNo <> '' then begin
+            WarehouseJournalLine."Serial No." := EVOEFLInventoryHelperEntry.EVO_EFL_SerialNo;
+            WarehouseJournalLine."New Serial No." := EVOEFLInventoryHelperEntry.EVO_EFL_NewSerialNo;
+        end;
+
+        if EVOEFLInventoryHelperEntry.EVO_EFL_LotNo <> '' then begin
+            WarehouseJournalLine."Lot No." := EVOEFLInventoryHelperEntry.EVO_EFL_LotNo;
+            WarehouseJournalLine."New Lot No." := EVOEFLInventoryHelperEntry.EVO_EFL_NewLotNo;
+        end;
+
+        if EVOEFLInventoryHelperEntry.EVO_EFL_PackageNo <> '' then begin
+            WarehouseJournalLine."Package No." := EVOEFLInventoryHelperEntry.EVO_EFL_PackageNo;
+            WarehouseJournalLine."New Package No." := EVOEFLInventoryHelperEntry.EVO_EFL_NewPackageNo;
+        end;
+
+        if EVOEFLInventoryHelperEntry.EVO_EFL_WarrantyDate <> 0D then
+            WarehouseJournalLine."Warranty Date" := EVOEFLInventoryHelperEntry.EVO_EFL_WarrantyDate;
+
+        if EVOEFLInventoryHelperEntry.EVO_EFL_ExpirationDate <> 0D then begin
+            WarehouseJournalLine."Expiration Date" := EVOEFLInventoryHelperEntry.EVO_EFL_ExpirationDate;
+            WarehouseJournalLine."New Expiration Date" := EVOEFLInventoryHelperEntry.EVO_EFL_NewExpirationDate;
+        end;
+
+        if Location."Directed Put-away and Pick" then
+            CalcCubageAndWeight(WarehouseJournalLine."Item No.", WarehouseJournalLine."Unit of Measure Code", WarehouseJournalLine."Qty. (Absolute)", WarehouseJournalLine.Cubage, WarehouseJournalLine.Weight);
+
+        WhseJnlRegisterLine.Run(WarehouseJournalLine);
+    end;
+
+    local procedure GetItem(ItemNo: Code[20]): Record Item
+    var
+        Item: Record Item;
+        ItemMustBeSpecifiedErr: Label 'Item number must be specified before posting a warehouse journal';
+        InvalidItemSpecifiedErr: Label 'An invalid item number of %1 has been specified. Please check the item number of the transaction before trying again.', Comment = '%1 - Item number';
+    begin
+        if ItemNo = '' then
+            Error(ItemMustBeSpecifiedErr);
+        if not Item.Get(ItemNo) then
+            Error(InvalidItemSpecifiedErr, ItemNo);
+        exit(Item);
+    end;
+
+    local procedure GetItemUnitOfMeasure(ItemNo: Code[20]; UnitOfMeasureCode: Code[10]): Record "Item Unit of Measure"
+    var
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+        UnitOfMeasureMustBeSpecifiedErr: Label 'Unit of measure code must be specified before posting a warehouse journal';
+        InvalidUnitOfMeasureSpecifiedErr: Label 'An invalid location/bin code combination of %1 %2 has been specified. Please check the bin code of the transaction before trying again.', Comment = '%1 - Item number, %2 - Unit of measure code';
+    begin
+        if UnitOfMeasureCode = '' then
+            Error(UnitOfMeasureMustBeSpecifiedErr);
+        if not ItemUnitOfMeasure.Get(ItemNo, UnitOfMeasureCode) then
+            Error(InvalidUnitOfMeasureSpecifiedErr, ItemNo, UnitOfMeasureCode);
+        exit(ItemUnitOfMeasure);
+    end;
+
+    local procedure GetItemVariant(ItemNo: Code[20]; VariantCode: Code[10]): Record "Item Variant"
+    var
+        ItemVariant: Record "Item Variant";
+        InvalidVariantSpecifiedErr: Label 'An invalid item number/variant code combination of %1 %2 has been specified. Please check the bin code of the transaction before trying again.', Comment = '%1 - Item number, %2 - Variant code';
+    begin
+        if VariantCode <> '' then begin
+            if not ItemVariant.Get(ItemNo, VariantCode) then
+                Error(InvalidVariantSpecifiedErr, ItemNo, VariantCode);
+        end else
+            Clear(ItemVariant);
+        exit(ItemVariant);
+    end;
+
+    local procedure GetLocation(LocationCode: Code[10]): Record Location
+    var
+        Location: Record Location;
+        LocationMustBeSpecifiedErr: Label 'Location code must be specified before posting a warehouse journal.';
+        InvalidLocationSpecifiedErr: Label 'An invalid location code of %1 has been specified. Please check the location code of the transaction before trying again.', Comment = '%1 - Location code';
+        LocationNotSetupForWarehousingErr: Label 'Location %1 is not setup for full warehousing, and therefore cannot be used within a warehouse journal.', Comment = '%1 - Location code';
+    begin
+        if LocationCode = '' then
+            Error(LocationMustBeSpecifiedErr);
+        if not Location.Get(LocationCode) then
+            Error(InvalidLocationSpecifiedErr, LocationCode);
+        if not Location."Bin Mandatory" then
+            Error(LocationNotSetupForWarehousingErr, Location.Code);
+        exit(Location);
+    end;
+
+    local procedure GetBin(LocationCode: Code[10]; BinCode: Code[20]): Record Bin
+    var
+        Bin: Record Bin;
+        BinMustBeSpecifiedErr: Label 'Bin code must be specified before posting a warehouse journal.';
+        InvalidBinSpecifiedErr: Label 'An invalid location/bin code combination of %1 %2 has been specified. Please check the bin code of the transaction before trying again.', Comment = '%1 - Location code, %2 - Bin code';
+    begin
+        if BinCode = '' then
+            Error(BinMustBeSpecifiedErr);
+        if not Bin.Get(LocationCode, BinCode) then
+            Error(InvalidBinSpecifiedErr, LocationCode, BinCode);
+        exit(Bin);
+    end;
+
+    local procedure CalcCubageAndWeight(ItemNo: Code[20]; UOMCode: Code[10]; Quantity: Decimal; var Cubage: Decimal; var Weight: Decimal)
+    var
+        ItemUnitOfMeasure: Record "Item Unit of Measure";
+    begin
+        if not ItemUnitOfMeasure.Get(ItemNo, UOMCode) then
+            Clear(ItemUnitOfMeasure);
+        Cubage := Quantity * ItemUnitOfMeasure.Cubage;
+        Weight := Quantity * ItemUnitOfMeasure.Weight;
+    end;
+}
