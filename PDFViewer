@@ -1,0 +1,134 @@
+codeunit 71129614 EVO_EFL_PDFViewer
+{
+    var
+        PDFViewerUrlTxt: Label 'https://bcpdfviewer.z6.web.core.windows.net/web/viewer.html?file=', Locked = true;
+        MissingFiltersErr: Label 'The source type, source id or field id is missing.';
+        UnsupportedDataTypeErr: Label 'The data type %1 is not supported.', Comment = '%1 - the unsupported data type';
+
+    procedure GetPdfViewerUrl() Url: Text
+    begin
+        Url := PDFViewerUrlTxt;
+    end;
+
+    procedure GetData(var EVOEFLPDFViewerBuffer: Record EVO_EFL_PDFViewerBuffer) Data: JsonObject
+    var
+        Content, ContentType : Text;
+    begin
+        GetContent(EVOEFLPDFViewerBuffer, ContentType, Content);
+        Data.Add('type', ContentType);
+        Data.Add('content', Content);
+    end;
+
+    procedure OpenPdfViewer(RecordVariant: Variant; FieldNo: Integer; Popup: Boolean)
+    var
+        EVOEFLPDFViewerBuffer: Record EVO_EFL_PDFViewerBuffer;
+    begin
+        // Check license
+        if not EVOEFLLicensing.ApplicationIsLicensed() then
+            exit;
+
+        SetPDFViewerBufferFilters(RecordVariant, FieldNo, EVOEFLPDFViewerBuffer);
+        if Popup then
+            OpenPopupPage(EVOEFLPDFViewerBuffer)
+        else
+            OpenPage(EVOEFLPDFViewerBuffer);
+    end;
+
+    local procedure GetContent(var EVOEFLPDFViewerBuffer: Record EVO_EFL_PDFViewerBuffer; var ContentType: Text; var Content: Text)
+    var
+        RecRef: RecordRef;
+        FldRef: FieldRef;
+        FieldIdFilter: Integer;
+        SourceTableFilter: Integer;
+        SourceIdFilter: Text;
+    begin
+        if Evaluate(SourceTableFilter, EVOEFLPDFViewerBuffer.GetFilter(EVO_EFL_SourceTableId)) then;
+        SourceIdFilter := EVOEFLPDFViewerBuffer.GetFilter(EVO_EFL_SourceId);
+        if Evaluate(FieldIdFilter, EVOEFLPDFViewerBuffer.GetFilter(EVO_EFL_FieldId)) then;
+
+        if (SourceTableFilter = 0) or (SourceIdFilter = '') or (FieldIdFilter = 0) then
+            Error(MissingFiltersErr);
+
+        RecRef.Open(SourceTableFilter);
+        RecRef.GetBySystemId(SourceIdFilter);
+        FldRef := RecRef.Field(FieldIdFilter);
+
+        GetContentFromFieldRef(FldRef, ContentType, Content);
+
+        RecRef.Close();
+    end;
+
+    local procedure GetContentFromFieldRef(FldRef: FieldRef; var ContentType: Text; var Content: Text)
+    var
+        TempBlob: Codeunit "Temp Blob";
+        Base64Convert: Codeunit "Base64 Convert";
+        InStr: InStream;
+    begin
+        case FldRef.Type of
+            FldRef.Type::Blob,
+            FldRef.Type::Media:
+                begin
+                    TempBlob := GetTempBlobFromFldRef(FldRef);
+                    TempBlob.CreateInStream(InStr);
+                    ContentType := 'base64';
+                    Content := Base64Convert.ToBase64(InStr);
+                end;
+            FldRef.Type::Text:
+                begin
+                    ContentType := 'url';
+                    Content := FldRef.Value;
+                end;
+            else
+                Error(UnsupportedDataTypeErr, FldRef.Type);
+        end
+    end;
+
+    local procedure GetTempBlobFromFldRef(FldRef: FieldRef) TempBlob: Codeunit "Temp Blob"
+    var
+        TenantMedia: Record "Tenant Media";
+    begin
+        case FldRef.Type of
+            FldRef.Type::Blob:
+                TempBlob.FromFieldRef(FldRef);
+
+            FldRef.Type::Media:
+                begin
+                    TenantMedia.Get(Format(FldRef.Value));
+                    TempBlob.FromRecord(TenantMedia, TenantMedia.FieldNo(Content));
+                end;
+        end
+    end;
+
+
+    // Open/View functions
+    local procedure OpenPage(var EVOEFLPDFViewerBuffer: Record EVO_EFL_PDFViewerBuffer)
+    var
+        EVOEFLPDFViewer: Page EVO_EFL_PDFViewer;
+    begin
+        EVOEFLPDFViewer.SetTableView(EVOEFLPDFViewerBuffer);
+        EVOEFLPDFViewer.Run();
+    end;
+
+    local procedure OpenPopupPage(var EVOEFLPDFViewerBuffer: Record EVO_EFL_PDFViewerBuffer)
+    var
+        Url: Text;
+    begin
+        Url := GetUrl(CurrentClientType(), CompanyName, ObjectType::Page, Page::EVO_EFL_PDFViewer, EVOEFLPDFViewerBuffer, true);
+        Url := Url + '&showheader=0&target="_blank"';
+        Hyperlink(Url);
+    end;
+
+    local procedure SetPDFViewerBufferFilters(RecordVariant: Variant; FieldNo: Integer; var EVOEFLPDFViewerBuffer: Record EVO_EFL_PDFViewerBuffer)
+    var
+        RecRef: RecordRef;
+    begin
+        RecRef.GetTable(RecordVariant);
+        EVOEFLPDFViewerBuffer.Reset();
+        EVOEFLPDFViewerBuffer.SetRange(EVO_EFL_SourceTableId, RecRef.Number);
+        EVOEFLPDFViewerBuffer.SetRange(EVO_EFL_SourceId, RecRef.Field(RecRef.SystemIdNo).Value);
+        EVOEFLPDFViewerBuffer.SetRange(EVO_EFL_FieldId, FieldNo);
+    end;
+
+    var
+        EVOEFLLicensing: Codeunit EVO_EFL_Licensing;
+}
