@@ -1,0 +1,119 @@
+codeunit 71129600 EVO_EFL_ReportHelper
+{
+    procedure RunRequestPage(ReportId: Integer; ExistingParameters: Text): Text
+    var
+        NewParameters: Text;
+    begin
+        NewParameters := Report.RunRequestPage(ReportId, ExistingParameters);
+        if (NewParameters <> '') and (NewParameters <> ExistingParameters) then
+            exit(NewParameters)
+        else
+            exit(ExistingParameters);
+    end;
+
+    procedure GetParameterTextFromBlobField(var BlobFieldRef: FieldRef) ParameterText: Text
+    var
+        TempBlob: Codeunit "Temp Blob";
+        TextInStream: InStream;
+    begin
+        Clear(ParameterText);
+        BlobFieldRef.CalcField();
+        TempBlob.FromFieldRef(BlobFieldRef);
+        TempBlob.CreateInStream(TextInStream, TextEncoding::UTF8);
+        TextInStream.Read(ParameterText);
+    end;
+
+    procedure SetBlobFieldFromParameterText(var BlobFieldRef: FieldRef; ParameterText: Text)
+    var
+        TempBlob: Codeunit "Temp Blob";
+        TextOutStream: OutStream;
+    begin
+        TempBlob.CreateOutStream(TextOutStream, TextEncoding::UTF8);
+        TextOutStream.Write(ParameterText, StrLen(ParameterText));
+        TempBlob.ToFieldRef(BlobFieldRef);
+    end;
+
+    procedure SetParameterValue(ParameterXML: Text; Parameter: Text; ParameterFieldType: FieldType; NewParameterValue: Variant): Text
+    var
+        TempAttributeXMLBuffer: Record "XML Buffer" temporary;
+        TempElementXMLBuffer: Record "XML Buffer" temporary;
+        XMLBufferWriter: Codeunit "XML Buffer Writer";
+        NewParameterText: Text;
+        DateFieldType: Date;
+        BooleanFieldType: Boolean;
+        TrueTok: Label 'true', Locked = true;
+        FalseTok: Label 'false', Locked = true;
+    begin
+        XMLBufferWriter.InitializeXMLBufferFromText(TempAttributeXMLBuffer, ParameterXML);
+        TempElementXMLBuffer.Copy(TempAttributeXMLBuffer, true);
+
+        TempAttributeXMLBuffer.SetCurrentKey(Type, Value);
+        TempAttributeXMLBuffer.SetRange(Type, TempAttributeXMLBuffer.Type::Attribute);
+        TempAttributeXMLBuffer.SetRange(Value, Parameter);
+        if TempAttributeXMLBuffer.FindFirst() then begin
+            TempElementXMLBuffer.Get(TempAttributeXMLBuffer."Parent Entry No.");
+
+            case ParameterFieldType of
+                FieldType::BigInteger,
+                FieldType::Code,
+                FieldType::DateFormula,
+                FieldType::DateTime,
+                FieldType::Decimal,
+                FieldType::Duration,
+                FieldType::Guid,
+                FieldType::Integer,
+                FieldType::Text,
+                FieldType::Time:
+                    Message('Unsupported Data Type');
+                FieldType::Date:
+                    begin
+                        DateFieldType := NewParameterValue;
+                        NewParameterText := Format(DateFieldType, 0, 9);   // 9 is XML format
+                    end;
+
+                FieldType::Boolean:
+                    begin
+                        BooleanFieldType := NewParameterValue;
+                        if BooleanFieldType then
+                            NewParameterText := TrueTok
+                        else
+                            NewParameterText := FalseTok;
+                    end;
+            end;
+
+            TempElementXMLBuffer.Value := CopyStr(NewParameterText, 1, MaxStrLen(TempElementXMLBuffer.Value));
+            TempElementXMLBuffer.Modify();
+        end;
+
+        TempAttributeXMLBuffer.Reset();
+        if TempAttributeXMLBuffer.IsEmpty then
+            exit('');
+
+        TempAttributeXMLBuffer.FindFirst();
+        exit(SaveToText(TempAttributeXMLBuffer));
+    end;
+
+    procedure SaveToText(var XMLBuffer: Record "XML Buffer"): Text
+    var
+        TempXMLBuffer: Record "XML Buffer" temporary;
+        XMLBufferReader: Codeunit "XML Buffer Reader";
+        TempBlob: Codeunit "Temp Blob";
+        EVOEFLTextHelper: Codeunit EVO_EFL_TextHelper;
+        ParameterXMLText: Text;
+        ParameterInStream: InStream;
+    begin
+        XMLBuffer.Reset();
+        Clear(ParameterXMLText);
+        Clear(TempBlob);
+
+        TempXMLBuffer.CopyImportFrom(XMLBuffer);
+        TempXMLBuffer := XMLBuffer;
+        TempXMLBuffer.SetCurrentKey("Parent Entry No.", Type, "Node Number");
+
+        XMLBufferReader.SaveToTempBlob(TempBlob, XMLBuffer);
+        TempBlob.CreateInStream(ParameterInStream);
+        ParameterInStream.Read(ParameterXMLText);
+        ParameterXMLText := EVOEFLTextHelper.RemoveControlCharacters(ParameterXMLText);
+        exit(ParameterXMLText);
+    end;
+}
