@@ -1,0 +1,412 @@
+codeunit 50119 "SIF_COR_AspinMgmt"
+{
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::EVS_ASP_ExportProductData, 'OnAfterFillItemDataBuffer', '', false, false)]
+    local procedure ExportProductDataOnAfterFillItemDataBuffer(Item: Record Item; var DataBuffer: array[54] of Text)
+    var
+        CountryRegion: Record "Country/Region";
+        UnitOfMeasureType: enum EVS_EIF_UnitOfMeasureType;
+    begin
+        if Item.IsTemporary then
+            exit;
+
+        //
+        //DataBuffer[17] := format(Item."Minimum Order Quantity");                                            //Minimum Multiples
+
+        DataBuffer[17] := format(Item.EVS_IVB_MinimumSellQty);                                              //Minimum Sell Qty
+        DataBuffer[18] := format(Item."Tariff No.");                                                        //Tariff No.
+        DataBuffer[19] := format(GetItemWeight(Item."No."));                                                //Item Weight
+
+        DataBuffer[20] := FormatText(Item.SIF_COR_SuperProduct);                                            //Freetype1
+        DataBuffer[21] := FormatText(Item.SIF_COR_SuperProductTitle);                                       //Freetype2
+        DataBuffer[22] := FormatText(GetPackagingDescription(Item."No.", UnitOfMeasureType::OuterCarton));  //Freetype3
+        DataBuffer[23] := FormatText(GetPackagingDescription(Item."No.", UnitOfMeasureType::Piece));        //Freetype4
+        DataBuffer[24] := FormatText(GetPackagingDescription(Item."No.", UnitOfMeasureType::InnerCarton));  //Freetype5
+        DataBuffer[25] := FormatText(Item.SIF_COR_Brand);                                                   //Freetype6
+        DataBuffer[26] := LastReceivedDate(Item."No.");                                                     //Freetype7
+        DataBuffer[27] := EarliestUnreceiptedPurchaseStatus(Item."No.");                                    //Freetype8
+
+        //Item - Unit Cost
+        case Item."Costing Method" of
+            Item."Costing Method"::FIFO:
+                DataBuffer[29] := EVSASPFileExportHelper.FormatDecimal(Item."Unit Cost", 6, 2);
+            Item."Costing Method"::Standard:
+                DataBuffer[29] := EVSASPFileExportHelper.FormatDecimal(Item."Standard Cost", 6, 2);
+            else
+                DataBuffer[29] := EVSASPFileExportHelper.FormatDecimal(Item."Unit Cost", 6, 2);
+        end;
+
+        if not CountryRegion.Get(Item."Country/Region of Origin Code") then
+            Clear(CountryRegion);
+        DataBuffer[37] := EVSASPFileExportHelper.FormatText(CountryRegion.Name, 35);
+
+        DataBuffer[38] := FormatText(GetEnumValueName(Item.SIF_COR_AspinStatus));                           //Product promo qualifying code 2
+        DataBuffer[39] := FormatText(Item.SIF_COR_SupersededCode);                                          //Product promo qualifying code 3
+        DataBuffer[40] := FormatText(Item.EVS_EIF_StatusCode);                                              //Product promo qualifying code 4
+
+        //"Alternative Minimum Multiple" to be populated with 1 for all records. 
+        DataBuffer[50] := EVSASPFileExportHelper.FormatInteger(1, 1);
+
+    end;
+
+    local procedure EarliestUnreceiptedPurchaseStatus(ItemNo: code[20]): text
+    var
+        PurchaseLine: record "Purchase Line";
+        PurchaseHeader: Record "Purchase Header";
+        EVSEPFPurchOrderStatusCode: record EVS_EPF_PurchOrderStatusCode;
+    begin
+        PurchaseLine.SetCurrentKey("Expected Receipt Date");
+
+        PurchaseLine.setrange("Document Type", PurchaseLine."Document Type"::Order);
+        PurchaseLine.setrange(Type, PurchaseLine.Type::Item);
+        PurchaseLine.setrange("No.", ItemNo);
+        PurchaseLine.setfilter("Outstanding Quantity", '>0');
+        if not PurchaseLine.FindFirst() then exit;
+
+        if not PurchaseHeader.get(PurchaseLine."Document Type"::Order, PurchaseLine."Document No.") then exit;
+
+        if not EVSEPFPurchOrderStatusCode.get(PurchaseHeader.EVS_EPF_DocumentStatusCode) then exit;
+
+        if EVSEPFPurchOrderStatusCode.SIF_COR_Confirmed then
+            exit('Confirmed')
+        else
+            exit('Unconfirmed');
+
+    end;
+
+    local procedure LastReceivedDate(ItemNo: code[20]): Text
+    var
+        ItemLedgerEntry: Record "Item Ledger Entry";
+    begin
+        ItemLedgerEntry.SetCurrentKey(ItemLedgerEntry."Posting Date");
+        ItemLedgerEntry.setrange("Item No.", ItemNo);
+        ItemLedgerEntry.setrange("Entry Type", ItemLedgerEntry."Entry Type"::Purchase);
+
+        if ItemLedgerEntry.FindLast() then
+            exit(
+             EVSASPFileExportHelper.FormatDate(ItemLedgerEntry."Posting Date"
+                ));
+    end;
+
+    local procedure GetPackagingDescription(ItemNo: code[20]; UnitOfMeasureType: enum EVS_EIF_UnitOfMeasureType): Text
+    var
+        ItemUnitOfMeasure: record "Item Unit of Measure";
+        TooManyItemUoMErr: label 'More than one Item Unit of Measure for Item No %1 and Packaging Type %2 was found', comment = '%1 Item No, %2 Packaging Type';
+    begin
+        ItemUnitOfMeasure.SetAutoCalcFields(EVS_IVB_PackagingDescription);
+
+        ItemUnitOfMeasure.setrange("Item No.", ItemNo);
+        ItemUnitOfMeasure.setrange(EVS_EIF_UnitOfMeasureType, UnitOfMeasureType);
+
+        if ItemUnitOfMeasure.Count > 1 then
+            error(TooManyItemUoMErr, ItemNo, UnitOfMeasureType);
+
+        if ItemUnitOfMeasure.FindFirst() then
+            exit(ItemUnitOfMeasure.EVS_IVB_PackagingDescription);
+    end;
+
+    local procedure FormatText(TextToFormat: text): Text
+    var
+        EVOEFLTextHelper: codeunit EVO_EFL_TextHelper;
+    begin
+        exit(copystr(EVOEFLTextHelper.RemoveControlCharacters(TextToFormat), 1, 128))
+    end;
+
+    local procedure GetEnumValueName(AspinStatus: enum SIF_COR_AspinStatus): Text;
+    var
+        index: Integer;
+        name: Text;
+    begin
+        index := AspinStatus.Ordinals.IndexOf(AspinStatus.AsInteger());
+        AspinStatus.Names.Get(index, name);
+        exit(name);
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"EVS_ASP_ExportCustomerData", 'OnAfterFillCustomerDataBuffer', '', false, false)]
+    local procedure OnAfterFillCustomerDataBuffer(Customer: Record Customer; var DataBuffer: array[92] of Text; EVSASPPartnerSettings: Record EVS_ASP_PartnerSettings)
+    begin
+        if Customer.IsTemporary then
+            exit;
+        DataBuffer[16] := EVSASPFileExportHelper.FormatText(Customer.SIF_COR_Sirenno, 36);
+        DataBuffer[43] := 'N';
+        DataBuffer[49] := EVSASPFileExportHelper.FormatText(GetCustomerEmailAddress(Customer."No."), 45);
+        DataBuffer[47] := IsProforma(Customer."Payment Terms Code");
+        DataBuffer[79] := EVSASPFileExportHelper.FormatText(Customer."Country/Region Code", 35);
+    end;
+
+    local procedure IsProforma(PaymentTermsCode: code[10]): Text
+    var
+        PaymentTerms: record "Payment Terms";
+    begin
+        if not PaymentTerms.get(PaymentTermsCode) then exit;
+        if PaymentTerms.EVO_EFF_AdvancedPaymentType = PaymentTerms.EVO_EFF_AdvancedPaymentType::" " then
+            exit('N')
+        else
+            exit('Y');
+    end;
+
+
+    local procedure GetCustomerEmailAddress(CustomerNo: Code[20]): Text[200]
+    var
+        CustomReportSelection: Record "Custom Report Selection";
+    begin
+        CustomReportSelection.SetRange(Usage, CustomReportSelection.Usage::"S.Order");
+        CustomReportSelection.SetRange("Source Type", Database::Customer);
+        CustomReportSelection.SetRange("Source No.", CustomerNo);
+        CustomReportSelection.SetFilter("Send To Email", '<>%1', '');
+        if not CustomReportSelection.FindFirst() then
+            exit('')
+        else
+            exit(CustomReportSelection."Send To Email");
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::"EVS_ASP_ExportProductData", 'OnAfterFillFilterLineDataBuffer', '', false, false)]
+    local procedure OnAfterFillFilterLineDataBuffer(Item: Record Item; var DataBuffer: array[6] of Text; EVSASPPartnerSettings: Record EVS_ASP_PartnerSettings)
+    begin
+        if Item.IsTemporary then
+            exit;
+        DataBuffer[2] := EVSASPFileExportHelper.FormatText(GetAnalysisDescription(Item, EVSASPPartnerSettings.EVS_ASP_FilterCode1, EVSASPPartnerSettings), 60);
+        DataBuffer[3] := EVSASPFileExportHelper.FormatText(GetAnalysisDescription(Item, EVSASPPartnerSettings.EVS_ASP_FilterCode2, EVSASPPartnerSettings), 60);
+        DataBuffer[4] := EVSASPFileExportHelper.FormatText(GetAnalysisDescription(Item, EVSASPPartnerSettings.EVS_ASP_FilterCode3, EVSASPPartnerSettings), 60);
+        DataBuffer[5] := EVSASPFileExportHelper.FormatText(GetAnalysisDescription(Item, EVSASPPartnerSettings.EVS_ASP_FilterCode4, EVSASPPartnerSettings), 60);
+        DataBuffer[6] := EVSASPFileExportHelper.FormatText(GetAnalysisDescription(Item, EVSASPPartnerSettings.EVS_ASP_FilterCode5, EVSASPPartnerSettings), 60);
+    end;
+
+    [EventSubscriber(ObjectType::Codeunit, Codeunit::EVS_ASP_ExportProductData, 'OnBeforeWriteNotesLineDataBuffer', '', false, false)]
+    local procedure OnBeforeWriteNotesLineDataBuffer(Item: Record Item; var IsHandled: Boolean; var DataBuffer: array[6] of Text; EVSASPPartnerSettings: Record EVS_ASP_PartnerSettings);
+    var
+        PurchaseLine: Record "Purchase Line";
+        NotesTextBuilder: TextBuilder;
+        PurchaseLinesNoOfLines: Integer;
+        LineTxt: Label 'Delivery Date %1 Expected %2, Available %3', Comment = '%1 = Expected Receipt Date, %2 - Qty Outstanding, %3 - Qty Outstanding Reserved Qty';
+        LineSeparatorTxt: Label '\n';
+    begin
+        PurchaseLine.SetRange("Document Type", PurchaseLine."Document Type"::Order);
+        PurchaseLine.SetRange(Type, PurchaseLine.Type::Item);
+        PurchaseLine.SetRange("No.", Item."No.");
+        PurchaseLine.SetFilter("Outstanding Quantity", '>0');
+        if PurchaseLine.FindSet() then
+            Clear(PurchaseLinesNoOfLines);
+        repeat
+            PurchaseLinesNoOfLines += 1;
+            NotesTextBuilder.Append(StrSubstNo(LineTxt, PurchaseLine."Expected Receipt Date", PurchaseLine."Outstanding Quantity", PurchaseLine."Reserved Quantity"));
+            NotesTextBuilder.Append(LineSeparatorTxt);
+        until PurchaseLine.Next() = 0;
+        DataBuffer[1] := NotesTextBuilder.ToText();
+        DataBuffer[2] := '';
+        DataBuffer[3] := '';
+
+        IsHandled := true;
+    end;
+
+    //Copy of procedure found on codeunit 9088466 "EVS_ASP_ExportProductData"
+    local procedure GetAnalysisDescription(Item: Record Item; EVSASPStockAnalysisMapping: Enum EVS_ASP_StockAnalysisMapping; EVSASPPartnerSettings: Record EVS_ASP_PartnerSettings): Text
+    var
+        EVSIWCItemWebCategory: Record EVS_IWC_ItemWebCategory;
+        GeneralLedgerSetup: Record "General Ledger Setup";
+    begin
+        GeneralLedgerSetup.Get();
+
+        case EVSASPStockAnalysisMapping of
+            //None
+            EVSASPStockAnalysisMapping::EVS_ASP_None:
+                exit('');
+
+            //Item Category
+            EVSASPStockAnalysisMapping::EVS_ASP_ItemCategory:
+                exit(GetItemCategoryDescription(Item."Item Category Code"));
+
+            //Item SubCategory
+            EVSASPStockAnalysisMapping::EVS_ASP_SubCategory1:
+                exit(GetItemSubCategory1Description(Item.EVS_IAC_ItemSubcategory1Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubCategory2:
+                exit(GetItemSubCategory2Description(Item.EVS_IAC_ItemSubcategory2Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubCategory3:
+                exit(GetItemSubCategory3Description(Item.EVS_IAC_ItemSubcategory3Code));
+            //Item SubAnalysis
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis1:
+                exit(GetItemSubAnalysis1Description(Item.EVS_IAC_ItemAnalysis1Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis2:
+                exit(GetItemSubAnalysis2Description(Item.EVS_IAC_ItemAnalysis2Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis3:
+                exit(GetItemSubAnalysis3Description(Item.EVS_IAC_ItemAnalysis3Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis4:
+                exit(GetItemSubAnalysis4Description(Item.EVS_IAC_ItemAnalysis4Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis5:
+                exit(GetItemSubAnalysis5Description(Item.EVS_IAC_ItemAnalysis5Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis6:
+                exit(GetItemSubAnalysis6Description(Item.EVS_IAC_ItemAnalysis6Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis7:
+                exit(GetItemSubAnalysis7Description(Item.EVS_IAC_ItemAnalysis7Code));
+            EVSASPStockAnalysisMapping::EVS_ASP_SubAnalysis8:
+                exit(GetItemSubAnalysis8Description(Item.EVS_IAC_ItemAnalysis8Code));
+            //Sequence
+            EVSASPStockAnalysisMapping::EVS_ASP_Sequence:
+                begin
+                    EVSIWCItemWebCategory.Reset();
+                    EVSIWCItemWebCategory.SetRange(EVS_IWC_Description, EVSASPPartnerSettings.EVS_ASP_ItemWebCategory);
+                    EVSIWCItemWebCategory.SetRange(EVS_IWC_ItemNo, Item."No.");
+                    if EVSIWCItemWebCategory.FindFirst() then
+                        exit(format(EVSIWCItemWebCategory.EVS_IWC_SequenceNo));
+                end;
+            //Dimension
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension1:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 1 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension2:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 2 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension3:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 3 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension4:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 4 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension5:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 5 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension6:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 6 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension7:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 7 Code", Item."No."));
+            EVSASPStockAnalysisMapping::EVS_ASP_ShortcutDimension8:
+                exit(GetDimensionCode(GeneralLedgerSetup."Shortcut Dimension 8 Code", Item."No."));
+        end;
+    end;
+
+    local procedure GetDimensionCode(ShortcutDimCode: Code[20]; ItemNo: Code[20]): Text[50]
+    var
+        DefaultDimension: Record "Default Dimension";
+        DimensionValue: Record "Dimension Value";
+
+    begin
+        if ShortcutDimCode = '' then
+            exit('');
+
+        DefaultDimension.SetRange("Table ID", Database::Item);
+        DefaultDimension.SetRange("No.", ItemNo);
+        DefaultDimension.SetRange("Dimension Code", ShortcutDimCode);
+        if not DefaultDimension.FindFirst() then
+            exit('');
+
+        if not DimensionValue.Get(DefaultDimension."Dimension Value Code") then
+            Clear(DimensionValue);
+        exit(DimensionValue.Name);
+    end;
+
+    local procedure GetItemCategoryDescription(ItemCategoryCode: Code[20]): Text[100]
+    var
+        ItemCategory: Record "Item Category";
+    begin
+        if not ItemCategory.Get(ItemCategoryCode) then
+            Clear(ItemCategory);
+        exit(ItemCategory.Description);
+    end;
+
+    local procedure GetItemSubCategory1Description(ItemSubCategoryCode: Code[20]): Text[100]
+    var
+        EVSIACItemSubcategory1: Record "EVS_IAC_ItemSubcategory1";
+    begin
+        if not EVSIACItemSubcategory1.Get(ItemSubCategoryCode) then
+            Clear(EVSIACItemSubcategory1);
+        exit(EVSIACItemSubcategory1.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubCategory2Description(ItemSubCategoryCode: Code[20]): Text[100]
+    var
+        EVSIACItemSubcategory2: Record "EVS_IAC_ItemSubcategory2";
+    begin
+        if not EVSIACItemSubcategory2.Get(ItemSubCategoryCode) then
+            Clear(EVSIACItemSubcategory2);
+        exit(EVSIACItemSubcategory2.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubCategory3Description(ItemSubCategoryCode: Code[20]): Text[100]
+    var
+        EVSIACItemSubcategory3: Record "EVS_IAC_ItemSubcategory3";
+    begin
+        if not EVSIACItemSubcategory3.Get(ItemSubCategoryCode) then
+            Clear(EVSIACItemSubcategory3);
+        exit(EVSIACItemSubcategory3.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis1Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis1: Record "EVS_IAC_ItemAnalysis1";
+    begin
+        if not EVSIACItemAnalysis1.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis1);
+        exit(EVSIACItemAnalysis1.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis2Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis2: Record "EVS_IAC_ItemAnalysis2";
+    begin
+        if not EVSIACItemAnalysis2.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis2);
+        exit(EVSIACItemAnalysis2.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis3Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis3: Record EVS_IAC_ItemAnalysis3;
+    begin
+        if not EVSIACItemAnalysis3.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis3);
+        exit(EVSIACItemAnalysis3.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis4Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis4: Record "EVS_IAC_ItemAnalysis4";
+    begin
+        if not EVSIACItemAnalysis4.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis4);
+        exit(EVSIACItemAnalysis4.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis5Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis5: Record "EVS_IAC_ItemAnalysis5";
+    begin
+        if not EVSIACItemAnalysis5.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis5);
+        exit(EVSIACItemAnalysis5.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis6Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis6: Record "EVS_IAC_ItemAnalysis6";
+    begin
+        if not EVSIACItemAnalysis6.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis6);
+        exit(EVSIACItemAnalysis6.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis7Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis7: Record "EVS_IAC_ItemAnalysis7";
+    begin
+        if not EVSIACItemAnalysis7.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis7);
+        exit(EVSIACItemAnalysis7.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemSubAnalysis8Description(ItemSubAnalyisCode: Code[20]): Text[100]
+    var
+        EVSIACItemAnalysis8: Record "EVS_IAC_ItemAnalysis8";
+    begin
+        if not EVSIACItemAnalysis8.Get(ItemSubAnalyisCode) then
+            Clear(EVSIACItemAnalysis8);
+        exit(EVSIACItemAnalysis8.EVS_IAC_Description);
+    end;
+
+    local procedure GetItemWeight(ItemNo: Code[20]): Decimal
+    var
+        OuterItemUnitOfMeasure: Record "Item Unit of Measure";
+        EVSEIFUOMHelper: Codeunit EVS_EIF_UOMHelper;
+    begin
+        OuterItemUnitofMeasure := EVSEIFUOMHelper.GetItemOuterUnitOfMeasure(ItemNo);
+        exit(OuterItemUnitOfMeasure.Weight);
+    end;
+
+    var
+        EVSASPFileExportHelper: Codeunit "EVS_ASP_FileExportHelper";
+
+}
