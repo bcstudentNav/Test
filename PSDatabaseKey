@@ -1,0 +1,3 @@
+Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\210\Service\NavAdminTool.ps1" >$null 3>$null
+Export-NAVEncryptionKey -KeyPath C:\evosoft\dbkey.key -ServerInstance AAD 
+Import-NAVEncryptionKey -ApplicationDatabaseName sqldb-pd-uks-dev-001 -ApplicationDatabaseServer sql-pd-uks-dev-uat-001.database.windows.net -KeyPath C:\evosoft\dbkey.key -ApplicationDatabaseCredentials (Get-Credential) -Force
