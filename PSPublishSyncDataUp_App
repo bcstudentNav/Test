@@ -1,0 +1,19 @@
+Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\210\Service\NavAdminTool.ps1" >$null 3>$null
+
+$BCServerInstance = "AAD";
+$AppName = 'Evo-supply Data-Bridge (Partner) - Aspin PixSell'
+$AppFile = "C:\Installation\Apps\Legacy\Integrations\Evo-soft Ltd._Evo-supply Data-Bridge (Partner) - Aspin PixSell_20.0.4.20.app"
+
+
+Publish-NAVApp -ServerInstance $BCServerInstance -Path $AppFile -SkipVerification 
+
+#Sync-NAVApp -ServerInstance $BCServerInstance -Name $AppName -Version '21.0.24.10' 
+
+#Start-NAVAppDataUpgrade -ServerInstance $BCServerInstance  -Name $AppName -Version '21.0.24.10' 
+
+#if first time
+#Install-NAVApp
+
+
+#Unpublish-NAVApp -ServerInstance $BCServerInstance -Name $AppName  -Version '20.0.4.19' 
+#Get-NAVAppInfo | install
