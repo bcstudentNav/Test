@@ -1,0 +1,113 @@
+function main {
+    Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\210\Service\NavAdminTool.ps1" >$null 3>$null
+
+    # Service Tier
+    #
+    $ServerInstance = "DEMO"
+
+    # Database.
+    #
+    $DatabaseServer = ""
+    $DatabaseInstance = ""
+    $DatabaseName = ""
+
+    # IIS Web Server Instance.
+    #
+    $IISServerName = localhost
+    $IISServerPort = 8080
+
+    # SQL Authentication/Azure
+    #
+    $SQLAuthentication = $false
+    $EncryptionKeyFile = "c:\temp\SQL.key"
+
+    # Services & Ports.
+    #
+    $ManagementServicesEnabled = "true"
+    $ManagementServicesPort = 7045 
+    $SOAPServicesEnabled = "true"
+    $SOAPServicesPort = 7047 
+    $ODataServicesEnabled = "true"
+    $ODataServicesPort  = 7048 
+    $DeveloperServicesEnabled = "true"
+    $DeveloperServicesPort = 7049 
+    $SnapshotDebuggerEnabled = "true"
+    $SnapshotDebuggerServicesPort = 7083 
+    $ClientServicesEnabled = "true"
+    $ClientServicesPort = 7085
+    $ManagementApiServicesEnabled = "true"
+    $ManagementApiServicesPort = 7086
+
+    # Get Credentials.
+    #
+    $ServiceCredential = Get-Credential -Message "Enter Service Account Credentials."
+
+    if ($SQLAuthentication -eq $true) {
+        $DatabaseCredential = Get-Credential -Message "Enter Database Account Credentials."
+    }
+
+    # Create Service Tier.
+    #
+    Write-Host "Creating Service Tier..."
+
+    New-NAVServerInstance -ServerInstance $ServerInstance -ClientServicesCredentialType Windows `
+      -DatabaseServer $DatabaseServer -DatabaseInstance $DatabaseInstance -DatabaseName $DatabaseName `
+      -ServiceAccount User -ServiceAccountCredential $ServiceCredential `
+      -ManagementServicesPort $ManagementServicesPort -SOAPServicesPort $SOAPServicesPort -ODataServicesPort $ODataServicesPort -DeveloperServicesPort $DeveloperServicesPort `
+      -SnapshotDebuggerServicesPort $SnapshotDebuggerServicesPort -ClientServicesPort $ClientServicesPort -ManagementApiServicesPort $ManagementApiServicesPort
+
+    # Enable/Disable Services.
+    #
+    SetConfiguration -ServerInstance $ServerInstance -KeyName ManagementServicesEnabled -KeyValue $ManagementServicesEnabled
+    SetConfiguration -ServerInstance $ServerInstance -KeyName SOAPServicesEnabled -KeyValue $SOAPServicesEnabled
+    SetConfiguration -ServerInstance $ServerInstance -KeyName ODataServicesEnabled -KeyValue $ODataServicesEnabled
+    SetConfiguration -ServerInstance $ServerInstance -KeyName DeveloperServicesEnabled -KeyValue $DeveloperServicesEnabled
+    SetConfiguration -ServerInstance $ServerInstance -KeyName SnapshotDebuggerEnabled -KeyValue $SnapshotDebuggerEnabled
+    SetConfiguration -ServerInstance $ServerInstance -KeyName ClientServicesEnabled -KeyValue $ClientServicesEnabled
+    SetConfiguration -ServerInstance $ServerInstance -KeyName ManagementApiServicesEnabled -KeyValue $ManagementApiServicesEnabled
+
+    # SQL Server Authentication.
+    #
+    if ($SQLAuthentication -eq $true) {
+        Write-Host "Enabling SQL authentication on Server Tier..."        
+        
+        New-NAVEncryptionKey -KeyPath $EncryptionKeyFile -Password $DatabaseCredential.Password
+        Import-NAVEncryptionKey -ServerInstance $ServerInstance -KeyPath $EncryptionKeyFile -ApplicationDatabaseCredentials $DatabaseCredential -ApplicationDatabaseServer $DatabaseServer -ApplicationDatabaseName $DatabaseName -#Password $DatabaseCredential.Password
+        Set-NAVServerConfiguration -ServerInstance $ServerInstance -DatabaseCredentials $DatabaseCredential
+
+        Write-Host "Encryption key saved in '$EncryptionKeyFile', please store this file safely." -ForegroundColor DarkYellow
+    }
+
+    # Create Web Server Instance & set PublicWebBaseUrl.
+    #
+    if ($ClientServicesEnabled -eq "true") {
+        $PublicWebBaseURL = $IISServerName + ":" + $IISServerPort + "/" + $ServerInstance
+    
+        Write-Host "Creating Web Server Instance '$PublicWebBaseURL'..."        
+
+        New-NAVWebServerInstance -WebServerInstance $ServerInstance -Server $IISServerName -ServerInstance $ServerInstance -ClientServicesCredentialType Windows -ManagementServicesPort $ManagementServicesPort -ClientServicesPort $ClientServicesPort -WebSitePort $IISServerPort -AddFirewallException
+        Set-NAVServerConfiguration -ServerInstance $ServerInstance -keyname PublicWebBaseUrl -keyvalue $PublicWebBaseURL
+    }
+
+    # Finished.
+    #
+    Write-Host "Script Complete, please start your new service tier to ensure it works as intended." -ForegroundColor Green
+}
+
+function SetConfiguration {
+    param(            
+        [string] $ServerInstance,
+        [string] $KeyName,
+        [string] $KeyValue
+    )
+    
+    Write-Host "Setting '$KeyName' to '$KeyValue'..."
+
+    try {
+        Set-NAVServerConfiguration -ServerInstance $ServerInstance -Keyname $KeyName -KeyValue $KeyValue
+    } catch {
+        throw "Unable to set server configuration key '$KeyName'."
+    }
+}
+
+main
