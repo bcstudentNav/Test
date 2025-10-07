@@ -1,0 +1,20 @@
+# Install license file
+# (c)2021 Evo-soft Limited
+#
+# 07/01/2021 - Neil Hallday
+
+$BCServerInstance = "AAD";
+$LicenseFile = "C:\Installation\Licenses\5152544.BClicense"
+
+# Prepare PowerShell
+#
+#cls
+Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\210\Service\NavAdminTool.ps1" >$null 3>$null
+#Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\210\Service\NAVModelTools.ps1" >$null 3>$null
+
+Import-NAVServerLicense -ServerInstance $BCServerInstance -LicenseFile $LicenseFile
+
+#Export-NAVServerLicenseInformation -ServerInstance DevWindows
+
+
+Restart-navserverinstance -serverinstance $BCServerInstance
