@@ -1,0 +1,117 @@
+cls
+
+Write-Host "MW - BCN"
+Write-Host "Reinstall Premier Extensions"
+
+Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\210\Service\NavAdminTool.ps1" >$null 3>$null
+
+$ServiceInstance = 'AAD'
+
+# Check Docker is running, BCContainerHelper is installed, license & database files exist & get artifact URL.
+Write-Host "Checking Elevated Permissions..." -NoNewline
+if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    throw "Insufficient permissions. Run PowerShell as administrator and try again."
+}
+Write-Host "OK"
+
+$AppName1 = 'Premier Decorations - High Jump'
+$SourceAddress1 = "C:\Installation\Apps\Premier\Evo-soft Ltd._Premier Decorations - High Jump_21.0.24.13.app"
+$UpgradeVersion1 = "true"
+$Install1 = "true"
+
+$AppName2 = 'Premier Decorations Core Features'
+$SourceAddress2 = "C:\Installation\Apps\Premier\BCN Ltd._Premier Decorations Core Features_20.0.0.130.app"
+$UpgradeVersion2 = "false"
+$Install2 = "true"
+
+$AppName3 = 'Premier Decorations Reports and Documents'
+$SourceAddress3 = "C:\Installation\Apps\Premier\BCN Ltd._Premier Decorations Reports and Documents_21.0.1.7.app"
+$UpgradeVersion3 = "false"
+$Install3 = "true"
+
+# Remove Custom Extension 3
+if ($Install3 -eq "true") {
+ Write-Host $AppName3
+
+ Write-Host "Uninstalling..."
+ Uninstall-NAVApp -ServerInstance $ServiceInstance -Name $AppName3 -ErrorAction Ignore
+
+ Write-Host "Unpublishing..."
+ Unpublish-NAVApp -ServerInstance $ServiceInstance -Name $AppName3 -ErrorAction Ignore
+}
+
+# Remove Custom Extension 2
+if ($Install2 -eq "true") {
+ Write-Host $AppName2
+
+ Write-Host "Uninstalling..."
+ Uninstall-NAVApp -ServerInstance $ServiceInstance -Name $AppName2 -ErrorAction Ignore
+
+ Write-Host "Unpublishing..."
+ Unpublish-NAVApp -ServerInstance $ServiceInstance -Name $AppName2 -ErrorAction Ignore
+}
+
+# Remove Custom Extension 1
+if ($Install1 -eq "true") {
+ Write-Host $AppName1
+
+ Write-Host "Uninstalling..."
+ Uninstall-NAVApp -ServerInstance $ServiceInstance -Name $AppName1 -ErrorAction Ignore
+
+ Write-Host "Unpublishing..."
+ Unpublish-NAVApp -ServerInstance $ServiceInstance -Name $AppName1 -ErrorAction Ignore
+}
+
+# Reinstall Custom Extension 1
+if ($Install1 -eq "true") {
+ Write-Host $AppName1
+ Write-Host "Publishing..."
+ Publish-NAVApp -ServerInstance $ServiceInstance -Path $SourceAddress1 -SkipVerification
+
+ Write-Host "Sync..."
+ Sync-NAVApp -ServerInstance $ServiceInstance -Name $AppName1 -Mode ForceSync -Force
+
+ if ($UpgradeVersion1 -eq "true") {
+ Write-Host "Upgrade..."
+ Start-NAVAppDataUpgrade -ServerInstance $ServiceInstance -Name $AppName1  >$null 3>$null
+ } else {
+ Write-Host "Installing..."
+ Install-NAVApp -ServerInstance $ServiceInstance -Name $AppName1 -Force
+ }
+}
+# Reinstall Custom Extension 2
+if ($Install2 -eq "true") {
+ Write-Host $AppName2
+ Write-Host "Publishing..."
+ Publish-NAVApp -ServerInstance $ServiceInstance -Path $SourceAddress2 -SkipVerification
+
+ Write-Host "Sync..."
+ Sync-NAVApp -ServerInstance $ServiceInstance -Name $AppName2 -Mode ForceSync -Force
+ 
+ if ($UpgradeVersion2 -eq "true") {
+ Write-Host "Upgrade..."
+ Start-NAVAppDataUpgrade -ServerInstance $ServiceInstance -Name $AppName2  >$null 3>$null
+ } else {
+ Write-Host "Installing..."
+ Install-NAVApp -ServerInstance $ServiceInstance -Name $AppName2 -Force
+ }
+}
+# Reinstall Custom Extension 3
+if ($Install3 -eq "true") {
+ Write-Host $AppName3
+ Write-Host "Publishing..."
+ Publish-NAVApp -ServerInstance $ServiceInstance -Path $SourceAddress3 -SkipVerification
+
+ Write-Host "Sync..."
+ Sync-NAVApp -ServerInstance $ServiceInstance -Name $AppName3 -Mode ForceSync -Force
+
+ if ($UpgradeVersion3 -eq "true") {
+ Write-Host "Upgrade..."
+ Start-NAVAppDataUpgrade -ServerInstance $ServiceInstance -Name $AppName3  >$null 3>$null
+ } else {
+ Write-Host "Installing..."
+ Install-NAVApp -ServerInstance $ServiceInstance -Name $AppName3 -Force
+ }
+}
+
+Write-Host "Done."
