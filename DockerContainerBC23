@@ -1,0 +1,305 @@
+# ______           _               _____                _   _             
+# |  _  \         | |             /  __ \              | | (_)            
+# | | | |___   ___| | _____ _ __  | /  \/_ __ ___  __ _| |_ _  ___  _ __  
+# | | | / _ \ / __| |/ / _ \ '__| | |   | '__/ _ \/ _` | __| |/ _ \| '_ \ 
+# | |/ / (_) | (__|   <  __/ |    | \__/\ | |  __/ (_| | |_| | (_) | | | |
+# |___/ \___/ \___|_|\_\___|_|     \____/_|  \___|\__,_|\__|_|\___/|_| |_|
+#                                                                            
+# Docker Creation for Business Central (AL Only Environments) v2.0.1
+# Copyright © 2024 BCN Group
+#
+# Written by   : Phil Sanders
+# Contributers : Stephen Watson, Neil Halliday
+#
+# The latest version of these scripts can be found at the following URL:
+# https://dev.azure.com/evosoft/Evo-soft%20(Tools%20and%20Upgrade%20Tools)/_git/Docker%20Container%20Creation%20Script
+#
+# -----------------------------------------------------------------------------------------------------------------------
+# - Primary Settings                                                                                                    -
+# -----------------------------------------------------------------------------------------------------------------------
+# - containerName:                 The intended name of your docker container (Do not use an existing server/dns name). -
+# - navVersion:                    The product version needed, eg. 22 for the latest update for BC22, 22.5 for          -
+# -                                BC22.5 or a full application version if you want a specific version.                 -
+# - licenseFile:                   Must be the full path to an appropriate license file.                                -
+# - databaseBackup:                Leave blank for a Cronus database, otherwise must be a full path to a file in a      -
+# -                                docker shared folder, for example %ProgramData%\BcContainerHelper.                   -
+# -----------------------------------------------------------------------------------------------------------------------
+# - Optional Artifact Settings                                                                                          -
+# -----------------------------------------------------------------------------------------------------------------------
+# - navVersionCountry:             Specifies the localisation required.                                                 -
+# -                                By default, leave as "gb".                                                           -
+# - navVersionType:                Specifies whether an OnPrem or sandbox build is to be installed (onprem, sandbox).   -
+# -                                By default, leave as "OnPrem".                                                       -
+# - navVersionSelection:           Influences the version installed (all, closest, secondToLastMajor or latest).        -
+# -                                By default, leave as "Latest".                                                       -
+# - navPreview:                    Enables access to public preview builds.                                             -
+# -                                By default, leave as false.                                                          -
+# -----------------------------------------------------------------------------------------------------------------------
+# - Optional Container Settings                                                                                         -
+# -----------------------------------------------------------------------------------------------------------------------
+# - useSSL:                        Enables SSL in the container.                                                        -
+# - useGenericImage:               Enables the generic image specified in genericImage and enables Hyper-V isolation.   -
+# -                                This may be required on newer versions of windows to run a different Windows build   -
+# -                                in the container.                                                                    -
+# - genericImage:                  The generic image to use if UseGenericImage is enabled.                              -
+# -                                Leave blank to let BCContainerHelper choose the correct image.                       -  
+# -----------------------------------------------------------------------------------------------------------------------
+
+$Script:containerName = "GFABC23"
+$Script:adminPassword = "P@ssw0rd"
+$Script:navVersion = "23.0"
+$Script:licenseFile = "C:\temp\Evo Soft - V23.bclicense"
+$Script:databaseBackup = ""
+
+# Optional Artifact Settings
+#
+$Script:navVersionCountry = "gb"
+$Script:navVersionType = "OnPrem"
+$Script:navVersionSelection = "Latest"
+$Script:navPreview = $false
+
+# Optional Container Settings
+#
+$Script:useSSL = $false
+$Script:useGenericImage = $true
+$Script:genericImage = ""
+
+# Other Settings (Do Not Change)
+#
+$Script:serverInstance = "BC"
+
+function Main()
+{
+    # Pre execution checks
+    #
+    CheckEnvironment
+    GetArtifact
+    
+    # Confirm options
+    #
+    ShowConfirmation    
+    
+    # Create Container
+    #
+    CreateContainer
+    CopyWindowsFonts
+
+    # Finish
+    #
+    ShowPostCreationMessages
+    ShowFinishedMessage
+}
+
+function CheckEnvironment()
+{
+    # Check version is correct for the script type.
+    #
+    Write-Host "Checking Requested Version..." -NoNewline
+    if ($Script:navVersion -lt 15) {
+        Write-Host "Failed"
+        throw "This script supports Business Central 15 or higher, use the C/SIDE and Hybrid Environments version of the script for lower versions."
+    }
+    Write-Host "OK"    
+    
+    # Check Powershell has elevated permissions.
+    #
+    Write-Host "Checking Elevated Permissions..." -NoNewline
+    if (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
+        Write-Host "Failed"
+        throw "Insufficient permissions. Run PowerShell as administrator and try again."
+    }
+    Write-Host "OK"
+
+    # Check BCContainerHelper is installed and force an update if requested.
+    #
+    Write-Host "Checking BCContainerHelper installed..." -NoNewline
+    if (-not (Get-Module -ListAvailable -Name BCContainerHelper)) {            
+        Write-Host "Failed"
+        throw "BCContainerHelper is not installed."    
+    }
+    Write-Host "OK"
+
+    # Check license file exists.
+    #
+    Write-Host "Checking License File..." -NoNewline
+    if (-not (Test-Path -Path $Script:licenseFile)) {
+        Write-Host "Failed"
+        throw "The license file does not exist: $Script:licenseFile"
+    }
+    Write-Host "OK"
+
+    # Check database backup exists.
+    #
+    Write-Host "Checking Database Backup..." -NoNewline
+    if ($Script:databaseBackup -ne '') {
+        if (-not (Test-Path -Path $Script:databaseBackup)) {
+            Write-Host "Failed"
+            throw "The database backup file does not exist: $Script:databaseBackup"
+        }
+    }
+    Write-Host "OK"
+}
+
+function GetArtifact()
+{
+    # Get artifact URL and confirm the requested version exists.
+    #
+    Write-Host "Retrieving Artifact URL..." -NoNewline
+
+    $Script:artifactParams = @{        
+        "type" = $Script:navVersionType 
+        "country" = $Script:navVersionCountry
+        "version" = $Script:navVersion
+        "select" = $Script:navVersionSelection
+    }
+    if ($Script:navPreview) {
+        $Script:artifactParams.Add("storageAccount", 'BcPublicPreview')
+    }
+
+    $Script:artifactUrl = Get-BcArtifactUrl @artifactParams
+    if ($Script:artifactUrl -eq $Script:null) {
+        Write-Host "Failed"
+        throw "The artifact URL for the requested product version does not exist: $Script:navVersionCountry $Script:navVersion $Script:navVersionType ($Script:navVersionSelection, Preview: $Script:navPreview)"
+    }
+    Write-Host "OK"
+}
+
+function ShowConfirmation()
+{
+    # Confirm before running script.
+    #
+    $Script:navDisplayVersion = $Script:navVersionCountry.ToString().ToUpper() + " " + $Script:navVersion
+
+    Write-Host ""
+    Write-Host "Docker Container Creation" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Container Name          : $Script:containerName"
+
+    if ($Script:navPreview -ne $true) {
+        Write-Host "Requested Version       : $Script:navDisplayVersion ($Script:navVersionType)"
+    } else {    
+        Write-Host "Requested Version       : $Script:navDisplayVersion ($Script:navVersionType, " -NoNewline
+        Write-Host "Public Preview" -ForegroundColor Red -NoNewline
+        Write-host ")"
+    }
+
+    Write-Host "License File            : $Script:licenseFile"
+           
+    if ($Script:databaseBackup -ne '') { 
+        Write-Host "Database Backup         : $Script:databaseBackup"    
+    }
+
+    Write-Host "Artifact URL            : $Script:artifactUrl"
+
+    if ($Script:useSSL -eq $true) {
+        Write-Host "SSL                     : Enabled"
+    }
+
+    if ($Script:useGenericImage -eq $true) {
+        if ($Script:genericImage -ne '') {
+            Write-Host "Using Generic Image     : $Script:genericImage"
+        } else {
+            Write-Host "Using Generic Image     : Let BCContainerHelper choose."
+        }
+        Write-Host "Isolation               : Hyper-V"
+    }
+
+    Write-Host ""
+    Write-Host "If the container already exists, it will be deleted and all data will be lost!" 
+    $Script:confirmation = (Read-Host "Are you sure you want to proceed").ToUpper()
+    if (($Script:confirmation -ne 'Y') -and ($Script:confirmation -ne 'YES')) {
+        Write-Host "Operation cancelled."
+        exit
+    }
+}
+
+function CreateContainer()
+{
+    # Prepare container credentials.
+    #
+    $Script:auth = 'UserPassword'
+    $Script:secureAdminPassword = ConvertTo-SecureString -String $Script:adminPassword -AsPlainText -Force
+    $Script:credential = New-Object pscredential 'admin', $Script:secureAdminPassword
+
+
+    # Build Parameter table
+    #
+    $Script:containerParams = @{
+        "accept_eula" = $true
+        "containerName" = $Script:containerName
+        "artifactUrl" = $Script:artifactUrl
+        "licenseFile" = $Script:licenseFile
+        "auth" = $Script:auth
+        "credential" = $Script:credential
+        "updateHosts" = $true
+        "alwaysPull" = $true    
+    }
+
+    if ($Script:useSSL -eq $true) {
+        $Script:containerParams.Add("usessl", $true)
+        $Script:containerParams.Add("installCertificateOnHost", $true)
+    }
+
+    if ($Script:useGenericImage -eq $true) {
+        if ($Script:genericImage -ne '') {
+        $Script:containerParams.Add("usegenericimage", $Script:genericImage)
+        } else {
+        $Script:containerParams.Add("useBestContainerOS", $true)
+        }
+        $Script:containerParams.Add("isolation", "hyperv")
+    }
+
+    if($Script:databaseBackup -ne '') {
+        $Script:AdditionalParameters = @('--env bakfile="' + $Script:databaseBackup + '"')   
+        $Script:containerParams.Add("additionalParameters", $Script:AdditionalParameters)
+    }
+
+    # Create container.
+    #
+    Write-Host ""
+    Write-Host "Creating new docker container $Script:containerName" -ForegroundColor Green
+    Write-Host ""
+
+    New-BcContainer @containerParams
+
+    Write-Host ""
+    Write-Host "Docker container created. Running any post-creation tasks." -ForegroundColor Green
+
+    # Dispose of sensitive variables.
+    #
+    Remove-Variable secureAdminPassword >$Script:null 2>$Script:null 3>$Script:null
+    Remove-Variable credential >$Script:null 2>$Script:null 3>$Script:null
+}
+
+function CopyWindowsFonts()
+{
+    # Copy windows fonts to container (needed for report development).
+    #
+    Write-Host ""
+    Write-Host "Installing Fonts" 
+    Write-Host ""
+
+    $Script:windowsFontsFolder = $Script:env:windir + "\Fonts"
+    Add-FontsToBcContainer -containerName $Script:containerName -path $Script:windowsFontsFolder
+}
+
+function ShowPostCreationMessages()
+{
+    # Prompt to add user to database.
+    # 
+    if ($Script:databaseBackup -ne '') {
+        Write-Host ""
+        Write-Host "Since you restored a database backup, you may need to add yourself to the database using the container powershell:" -ForegroundColor Green
+        Write-Host "   New-NAVServerUser -ServerInstance $Script:serverInstance -WindowsAccount" $Script:userName -ForegroundColor Gray 
+        Write-Host "   New-NAVServerUserPermissionSet -ServerInstance $Script:serverInstance -WindowsAccount $Script:userName -PermissionSetId SUPER" -ForegroundColor Gray
+    }
+}
+
+function ShowFinishedMessage()
+{
+    Write-Host ""
+    Write-Host "Docker container successfully created." -ForegroundColor Green
+    Write-Host ""
+}
+
+Main
