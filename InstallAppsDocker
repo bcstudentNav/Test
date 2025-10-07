@@ -1,0 +1,171 @@
+# Evo-supply Install v1.0
+# Copyright © 2020 Evo-soft Limited
+#
+# Written by : Phil Sanders & Neil Halliday
+
+# Prepare PowerShell
+#
+cls
+
+Write-Host "Evo-supply Foundation Installer"
+Write-Host "Copyright © 2021 Evo-soft Limited"
+Write-Host ""
+
+# Set preference to stop script on error.
+#
+$ErrorActionPreference = "Stop"
+
+# Set Paths and BCContainerName.
+#
+$CSVFile = "C:\Docker\PremierBC21CU11\Evosupply New.csv"
+$BCContainerName = "PREMIERBC21CU11"
+
+# Import CSV file and iterate through contents, importing listed extensions.
+#
+$Extensions = Import-Csv $CSVFile | sort Priority
+
+Write-Host "Extension reference file: " -NoNewline
+Write-Host $CSVFile -ForegroundColor Cyan
+Write-Host "Container: " -NoNewline
+Write-Host $BCContainerName -ForegroundColor Cyan
+Write-Host ""
+
+foreach ($Extension in $Extensions) {  
+  Write-Host "Extension: " -NoNewLine
+  Write-Host $Extension.Name -ForegroundColor Cyan
+
+  if ($Extension.UninstallFirst -eq '1') {
+    #Uninstall old version.
+    #
+    Write-Host "   Uninstalling old version..." -NoNewline  
+  
+    $error.Clear()
+
+    try {       
+      if ($Extension.OldVersion -eq '0') {
+        UnInstall-BcContainerApp -containerName $BCContainerName -name $Extension.Name -Force >$null 3>$null
+      } else {
+        UnInstall-BcContainerApp -containerName $BCContainerName -name $Extension.Name -version $Extension.OldVersion -Force >$null 3>$null
+      }
+      start-sleep -Milliseconds 100
+    }
+    catch { 
+    }
+    if ($Error.Count -eq 0) {
+        Write-Host "Done" -ForegroundColor Green
+    } else {
+        Write-Host "Failed :" $error[0] -ForegroundColor Red
+    }
+
+    # Unpublish old version.
+    #
+    Write-Host "   Unpublishing old version..." -NoNewline  
+  
+    $error.Clear()
+
+    try {
+      if ($Extension.OldVersion -eq '0') {
+        UnPublish-BcContainerApp -containerName $BCContainerName -name $Extension.Name >$null 3>$null
+      } else {
+        UnPublish-BcContainerApp -containerName $BCContainerName -name $Extension.Name -version $Extension.OldVersion >$null 3>$null
+      }
+      start-sleep -Milliseconds 100
+    }
+    catch { 
+    }
+    if ($Error.Count -eq 0) {
+        Write-Host "Done" -ForegroundColor Green
+    } else {
+        Write-Host "Failed :" $error[0] -ForegroundColor Red
+        Write-Host ""
+    }
+  }
+
+  if ($Extension.Install -eq '1') {
+    
+    # Publish.
+    #      
+    $error.Clear()
+
+    try {
+      Publish-BcContainerApp -containerName $BCContainerName -appFile $Extension.AppPath -skipVerification -packageType Extension >$null 3>$null
+      start-sleep -Milliseconds 100
+    }
+    catch { 
+    }
+    if ($Error.Count -eq 0) {
+      Write-Host "Done"  -ForegroundColor Green
+    } else {
+      Write-Host "Failed :" $error[0] -ForegroundColor Red
+      Write-Host ""
+      exit
+    }
+
+    # Sync.
+    #
+    if ($Extension.SyncRequired -eq '1') {        
+      $error.Clear()
+
+      try {
+          if ($Extension.NewVersion -eq '0') {
+            Sync-BcContainerApp -containerName $BCContainerName -appName $Extension.Name -Mode ForceSync -Force >$null 3>$null
+          } else { 
+            Sync-BcContainerApp -containerName $BCContainerName -appName $Extension.Name -appVersion $Extension.NewVersion -Mode ForceSync -Force  >$null 3>$null
+          }
+          start-sleep -Milliseconds 100
+      }
+      catch { 
+      }
+      if ($Error.Count -eq 0) {
+        Write-Host "Done" -ForegroundColor Green
+      } else {
+        Write-Host "Failed :" $error[0] -ForegroundColor Red
+        Write-Host ""
+        exit
+      }
+    }
+
+    # Data Upgrade
+    #
+    if ($Extension.DataUpgradeRequired -eq '1') {
+        $error.Clear()
+
+        try {
+            if ($Extension.NewVersion -eq '0') {
+                Start-BcContainerAppDataUpgrade -containerName $BCContainerName -appName $Extension.Name >$null 3>$null
+            } else {
+                Start-BcContainerAppDataUpgrade -containerName $BCContainerName -appName $Extension.Name -appVersion $Extension.NewVersion >$null 3>$null
+            }
+            start-sleep -Milliseconds 100
+        }
+        catch { 
+        }
+        if ($Error.Count -eq 0) {
+            Write-Host "Done" -ForegroundColor Green
+        } else {
+            Write-Host "Failed :" $error[0] -ForegroundColor Red
+            Write-Host ""
+            exit
+        }
+    }
+  
+    # Install.
+    #
+    $error.Clear()
+
+    try {
+        Install-BcContainerApp -containerName $BCContainerName -appName $Extension.Name -Force >$null 3>$null
+        start-sleep -Milliseconds 100
+    }
+    catch { 
+    }
+    if ($Error.Count -eq 0) {
+        Write-Host "Done" -ForegroundColor Green
+    } else {
+        Write-Host "Failed :" $error[0] -ForegroundColor Red
+        Write-Host ""
+    }
+
+    Write-Host ""
+  }
+}
