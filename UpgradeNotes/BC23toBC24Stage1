@@ -1,0 +1,329 @@
+# Evo-supply Upgrade - Stage #1
+# Copyright © 2023 BCN Limited
+#
+# Written by : Neil Halliday
+
+# Prepare PowerShell
+#
+
+# 1. SystemApplication
+# 2. BaseApplication
+# 3. Application
+
+
+# Things to do:-
+#                 1. Add an automatic back-up process for the database being upgraded
+#                 2. Need to check if there are multiple versions of an extension installed (mainly System) and stop if so
+
+function main
+{
+    Clear-Host
+    Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\230\Service\NavAdminTool.ps1" >$null 3>$null
+
+    Write-Host "Evo-supply Upgrade - Stage #1"
+    Write-Host "Copyright © 2023 BCN Limited"
+    Write-Host ""
+    Write-Host "MAKE SURE YOU HAVE BACKED UP YOUR DATABASE BEFORE RUNNING THIS PROCESS" -ForegroundColor Red
+    Write-Host ""
+
+    $BCServerInstance = "BC230"
+    $CurrentAppsPath = $scriptPath + '\CurrentApps'
+    $UpgradeAppsPath = $scriptPath + '\UpgradeApps'
+    $MicrosoftInstallFile = $scriptPath + '\Microsoft.csv'
+    $OthersInstallFile = $scriptPath + '\Others.csv'
+    $Script:MicrosoftResult = @()
+    $Script:OtherResult = @()
+
+    # Space for core Microsoft apps
+    $Script:SystemApplicationApp = @()
+    $Script:BaseApplicationApp = @()
+    $Script:ApplicationApp = @()
+
+    Write-Host "Root Folder: " -NoNewLine
+    Write-Host $scriptPath -ForegroundColor Cyan
+    Write-Host "Application Storage: " -NoNewline
+    Write-Host $AppsPath -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "Server instance: " -NoNewline
+    Write-Host $BCServerInstance -ForegroundColor Cyan
+    Write-Host ""
+
+    DeleteExistingAppFiles
+    ExportInstalledApps
+    Get-AppDependencies
+    UnInstallApps
+    UnPublishSymbols
+    StopServerInstance
+
+    Write-Host ""
+    Write-Host ""
+    Write-Host ""
+    Write-Host ""
+    Write-Host ""
+    Write-Host "Stage #1 of the update is now complete. You must now complete the following tasks:-"
+    Write-Host ""
+    Write-Host "1. Run setup.exe from your current installation and uninstall Business Central."
+    Write-Host "2. Run setup.exe for the new version of business central to install components of the update."
+    Write-Host "    a. Follow setup pages until you get to the Microsoft Dynamics 365 Business Central Setup page."
+    Write-Host "    b. Select Advanced installation options > Choose an installation option > Custom."
+    Write-Host "    c. On the Customize the installation page, select the following components as a minimum:"
+    Write-Host "        - AL Development Environment (optional but recommended)"
+    Write-Host "        - Server"
+    Write-Host "        - Web Server Components."
+    Write-Host "    d. Select Next."
+    Write-Host "    e. On the Specify parameters page, set the fields as needed."
+    Write-Host "    f. Select Apply to complete the installation."
+    Write-Host "3. Run the upgrade-stage-2.ps1 script."
+    exit
+}
+
+function DeleteExistingAppFiles
+{
+    Write-Host "Deleting existing application files..." -NoNewline
+    $ApplicationFiles = $CurrentAppsPath + "\*.app"
+
+    try
+    {
+        Remove-Item $ApplicationFiles
+        Write-Host "Done" -ForegroundColor Green
+    }
+    catch
+    {
+    }
+    ShowError
+}
+
+
+function ExportInstalledApps
+{
+    Write-Host "Exporting installed applications..."
+    Write-Host ""
+
+    $InstalledApps = Get-NAVAppInfo -ServerInstance $BCServerInstance
+    foreach ($InstalledApp in $InstalledApps)
+        {
+            $AppFilename = $InstalledApp.Publisher + '_' + $InstalledApp.Name + '.app'
+            $AppFilename = ([char[]]$AppFilename | where { [IO.Path]::GetinvalidFileNameChars() -notcontains $_ }) -join ''
+
+            $AppPath = $CurrentAppsPath + '\' + $AppFilename
+            Write-Host "Exporting " -NoNewline
+            Write-Host $InstalledApp.Name -ForegroundColor Cyan
+            Write-Host "Filename: " -NoNewline
+            Write-Host $AppPath -ForegroundColor Cyan
+            Write-Host "Status: " -NoNewline
+
+            $Error.Clear()
+            try
+            {   
+                Get-NAVAppRuntimePackage -ServerInstance $BCServerInstance -Name $InstalledApp.Name -Version $InstalledApp.Version -Path $AppPath
+            }
+            catch
+            {
+            }
+            ShowError
+
+            # Save core Microsoft apps
+            if ($InstalledApp.Publisher -eq 'Microsoft' -and $InstalledApp.Name -eq 'System Application') {
+                $Script:SystemApplicationApp = $InstalledApp
+            }
+            if ($InstalledApp.Publisher -eq 'Microsoft' -and $InstalledApp.Name -eq 'Base Application') {
+                $Script:BaseApplicationApp = $InstalledApp
+            }
+            if ($InstalledApp.Publisher -eq 'Microsoft' -and $InstalledApp.Name -eq 'Application') {
+                $Script:ApplicationApp = $InstalledApp
+            }
+
+            Write-Host ""
+        }
+    Write-Host ""
+}
+
+function Get-AppDependencies {
+    [CmdletBinding()]
+    param(            
+        [string] $Path   
+    )
+    
+    function AddToDependencyTree() {
+        param(
+            [PSObject] $App,
+            [PSObject[]] $DependencyArray,
+            [PSObject[]] $AppCollection,
+            [Int] $Order = 1
+        )   
+
+        foreach ($Dependency in $App.Dependencies) {
+                $DependencyArray = AddToDependencyTree `
+                    -App ($AppCollection | Where-Object AppId -eq $Dependency.AppId) `
+                    -DependencyArray $DependencyArray `
+                    -AppCollection $AppCollection `
+                    -Order ($Order - 1)
+        }
+
+        if (-not($DependencyArray | Where-Object AppId -eq $App.AppId)) {
+            $DependencyArray += $App
+            try {
+                ($DependencyArray | Where-Object AppId -eq $App.AppId).ProcessOrder = $Order
+            }
+            catch { }
+        }
+        else {
+            if (($DependencyArray | Where-Object AppId -eq $App.AppId).ProcessOrder -gt $Order) {
+                ($DependencyArray | Where-Object AppId -eq $App.AppId).ProcessOrder = $Order
+            } 
+        }
+
+        $DependencyArray
+    }
+
+    #Script execution
+    #. (Join-Path $PSScriptRoot "GetDependencies_TestApps.ps1")
+
+    if ($Path -eq "") {
+        $Path = $CurrentAppsPath
+    }
+    $AllAppFiles = Get-ChildItem -Path $Path -Filter "*.app"
+
+    Write-Host "Cataloguing dependencies... " -NoNewline
+
+    $MicrosoftApps = @()
+    $OtherApps = @()
+    foreach ($AppFile in $AllAppFiles) {
+        $App = Get-NAVAppInfo -Path $AppFile.FullName
+        if ($App.Publisher -eq 'Microsoft' -and $App.Name -ne 'System Application' -and $App.Name -ne 'Base Application' -and $App.Name -ne 'Application') {
+        $MicrosoftApps += [PSCustomObject]@{
+            AppId        = $App.AppId
+            Version      = $App.Version
+            Name         = $App.Name
+            Publisher    = $App.Publisher
+            ProcessOrder = 0                            
+            Dependencies = $App.Dependencies
+            Path         = $AppFile.Name
+        } } else {
+            if ($App.Publisher -ne 'Microsoft') {
+                $OtherApps += [PSCustomObject]@{
+                AppId        = $App.AppId
+                Version      = $App.Version
+                Name         = $App.Name
+                Publisher    = $App.Publisher
+                ProcessOrder = 0                            
+                Dependencies = $App.Dependencies
+                Path         = $AppFile.Name
+                }
+            }
+        }
+    }
+
+    $MicrosoftApps | ForEach-Object {    
+        $Script:MicrosoftResult = AddToDependencyTree -App $_ -DependencyArray $Script:MicrosoftResult -AppCollection $MicrosoftApps -Order $MicrosoftApps.Count }
+    $OtherApps | ForEach-Object {    
+        $Script:OtherResult = AddToDependencyTree -App $_ -DependencyArray $Script:OtherResult -AppCollection $OtherApps -Order $OtherApps.Count }
+
+
+    Write-Host "Done" -ForegroundColor Green
+    Write-Host ""
+
+    $Script:MicrosoftResult | Sort-Object ProcessOrder | Export-Csv -Path $MicrosoftInstallFile -NoTypeInformation
+    $Script:OtherResult | Sort-Object ProcessOrder | Export-Csv -Path $OthersInstallFile -NoTypeInformation
+}
+
+
+#
+# Uninstall the existing applications in the dependency order.
+# First we need to start with the Other extensions, and then 
+# we uninstall the standard Microsoft extensions
+#
+
+function UnInstallApps
+{
+    # Uninstall none Microsoft Apps
+    $UninstallObjects = $Script:OtherResult | Sort-Object ProcessOrder -Descending
+    foreach($App in $UninstallObjects) {
+        UnInstallApp -App $App
+    }
+
+    Write-Host ""
+
+    # Uninstall Microsoft Apps
+    $UninstallObjects = $Script:MicrosoftResult | Sort-Object ProcessOrder -Descending
+    foreach($App in $UninstallObjects) {
+        UnInstallApp -App $App
+    }
+
+    # Uninstall Microsoft core applications in correct order
+    UnInstallApp -App $Script:ApplicationApp
+    UnInstallApp -App $Script:BaseApplicationApp
+    UnInstallApp -App $Script:SystemApplicationApp
+
+    Write-Host ""
+}
+
+function UnInstallApp {
+    param (
+        [PSObject] $App
+    )
+
+    Write-Host "Uninstalling : " -NoNewline
+    Write-Host $App.Publisher -ForegroundColor Cyan -NoNewline
+    Write-Host " : " -NoNewline
+    Write-Host $App.Name -ForegroundColor Cyan -NoNewline
+    Write-Host " : " -NoNewline
+    Write-Host $App.Version  -ForegroundColor Cyan -NoNewline
+    Write-Host " ... " -NoNewline
+
+    $Error.Clear()
+    try
+    {   
+        Uninstall-NAVApp -ServerInstance $BCServerInstance -Name $App.Name -Version $App.Version -Force
+    }
+    catch
+    {
+    }
+    ShowError
+
+    Write-Host ""
+}
+
+function UnPublishSymbols {
+    Write-Host "Unpublishing Symbols... " -NoNewline
+
+    $Error.Clear()
+    try
+    {   
+        Unpublish-NAVApp -ServerInstance $BcServerInstance -Name System
+    }
+    catch
+    {
+    }
+    ShowError
+    
+    Write-Host ""
+}
+
+function StopServerInstance {
+    Write-Host "Stopping server instance " -NoNewline
+    Write-Host $BCServerInstance -ForegroundColor Cyan -NoNewline
+    Write-Host "... "
+
+    $Error.Clear()
+    try
+    {   
+        Stop-NAVServerInstance -ServerInstance $BcServerInstance
+    }
+    catch
+    {
+    }
+    ShowError
+    Write-Host ""
+}
+
+function ShowError {
+    if ($Error.Count -eq 0) {
+    } else {
+        Write-Host "Failed :" $error[0] -ForegroundColor Red
+    } 
+}
+
+$scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+main
