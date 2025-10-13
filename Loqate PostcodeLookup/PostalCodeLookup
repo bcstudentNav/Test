@@ -1,0 +1,176 @@
+codeunit 50200 "EVO_LAM_PostalCodeLookup"
+{
+    procedure CheckAddress(var LAMAddressRequestBuffer: Record EVO_LAM_AddressRequestBuffer; var TempAutoCompleteAddress: Record "Autocomplete Address" temporary): Boolean
+    begin
+        exit(CheckAddress(LAMAddressRequestBuffer, '', TempAutoCompleteAddress));
+    end;
+
+    procedure CheckAddress(var LAMAddressRequestBuffer: Record EVO_LAM_AddressRequestBuffer; Container: Text; var TempAutoCompleteAddress: Record "Autocomplete Address" temporary): Boolean
+    var
+        CompanyInformation: Record "Company Information";
+        TempLAMAddressFindBuffer: Record EVO_LAM_AddressFindBuffer temporary;
+        RequestBody: Text;
+    begin
+        RequestBody := LAMAddressRequestBuffer.EVO_LAM_PostCode + ' ';
+        RequestBody += LAMAddressRequestBuffer.EVO_LAM_Address + ' ';
+        RequestBody += LAMAddressRequestBuffer.EVO_LAM_Address2 + ' ';
+        RequestBody += LAMAddressRequestBuffer.EVO_LAM_City + ' ';
+        if LAMAddressRequestBuffer.EVO_LAM_TerritoryCode <> '' then
+            RequestBody += LAMAddressRequestBuffer.EVO_LAM_TerritoryCode + ' ';
+
+        RequestBody += LAMAddressRequestBuffer.EVO_LAM_County + ' ';
+        if LAMAddressRequestBuffer.EVO_LAM_CountryRegionCode <> '' then
+            RequestBody += LAMAddressRequestBuffer.EVO_LAM_CountryRegionCode + ' '
+        else begin
+            CompanyInformation.Get();
+            RequestBody += CompanyInformation."Country/Region Code";
+        end;
+
+        if not LoqateFindCall(RequestBody, Container, TempLAMAddressFindBuffer) then
+            exit;
+
+        if not TempLAMAddressFindBuffer.FindSet() then
+            exit;
+
+        Commit();
+        if Page.RunModal(Page::EVO_LAM_AddressSelection, TempLAMAddressFindBuffer) = Action::LookupOK then
+            exit(LoqateRetrieveCall(TempLAMAddressFindBuffer."EVO_LAM_AddressCode", TempAutoCompleteAddress));
+    end;
+
+    local procedure LoqateFindCall(searchString: Text; container: Text; var TempLAMAddressFindBuffer: Record "EVO_LAM_AddressFindBuffer"): Boolean
+    var
+        HttpClient: HttpClient;
+        HttpRequestMessage: HttpRequestMessage;
+        HttpResponseMessage: HttpResponseMessage;
+        Headers: HttpHeaders;
+        JObject: JsonObject;
+        JArray: JsonArray;
+        JToken: JsonToken;
+        JsonText: Text;
+        URL: Text;
+        counter: Integer;
+    begin
+        GetSetup();
+
+        //Limit to 20 results if there are more means the information provided is not good enough
+        //URL := ApetitoSetup."Loqate Find URL" + '?Key='+ApetitoSetup."Loqate Key"+ '&Limit=20&Countries=GB,US,CA&Text='+searchString;
+
+        URL := LAMSetup.EVO_LAM_FindURL + '?Key=' + LAMSetup.EVO_LAM_APIKey + '&Countries=' + LAMSetup.EVO_LAM_CountryFilter + '&Text=' + searchString;
+        if container <> '' then
+            URL := URL + '&Container=' + container;
+
+        HttpClient.Timeout(60000 * 3);
+        HttpRequestMessage.SetRequestUri(URL);
+        HttpRequestMessage.Method('POST');
+        HttpRequestMessage.GetHeaders(Headers);
+        Headers.Add('Return-Type', 'application/json');
+        if HttpClient.Send(HttpRequestMessage, HttpResponseMessage) then begin
+            HttpResponseMessage.Content.ReadAs(JsonText);
+            if JsonText <> '' then begin
+                JObject.ReadFrom(JsonText);
+
+                JObject.Get('Items', JToken);
+                JArray := JToken.AsArray();
+
+                if JArray.Count > 0 then
+                    for counter := 0 to JArray.Count - 1 do begin
+                        JArray.Get(counter, JToken);
+                        JObject := JToken.AsObject();
+                        if JObject.Get('Type', JToken) then
+                            if JToken.AsValue().AsText() = 'Address' then begin
+                                TempLAMAddressFindBuffer.Init();
+                                if JObject.Get('Id', JToken) then
+                                    TempLAMAddressFindBuffer."EVO_LAM_AddressCode" := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempLAMAddressFindBuffer."EVO_LAM_AddressCode"));
+                                if JObject.Get('Text', JToken) then
+                                    TempLAMAddressFindBuffer.EVO_LAM_Description := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempLAMAddressFindBuffer.EVO_LAM_Description));
+                                if JObject.Get('Description', JToken) then
+                                    TempLAMAddressFindBuffer."EVO_LAM_Description2" := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempLAMAddressFindBuffer."EVO_LAM_Description2"));
+
+                                TempLAMAddressFindBuffer.Insert();
+                                //LoqateRetrieveCall(TempJObject.GetValue('Id').ToString,tempAutocompleteAddress);
+                            end else
+                                //Call recursivelly
+                                //Commented to reduce the number of calls. If cannot find an Address type then the user needs to insert more information
+                                //LoqateFindCall(searchString,TempJObject.GetValue('Id').ToString,tempAutocompleteAddress);
+                                //call recursivelly only one level down in case the first call was not an address
+                                if container = '' then
+                                    if JObject.Get('Id', JToken) then
+                                        LoqateFindCall(searchString, JToken.AsValue().AsText(), TempLAMAddressFindBuffer);
+                    end;
+            end;
+        end else
+            Message(GetLastErrorText);
+
+        exit(not TempLAMAddressFindBuffer.IsEmpty);
+    end;
+
+    local procedure LoqateRetrieveCall(searchId: Text; var TempAutocompleteAddress: Record "Autocomplete Address"): Boolean
+    var
+        HttpClient: HttpClient;
+        HttpRequestMessage: HttpRequestMessage;
+        HttpResponseMessage: HttpResponseMessage;
+        Headers: HttpHeaders;
+        JObject: JsonObject;
+        JArray: JsonArray;
+        JToken: JsonToken;
+        JsonText: Text;
+        URL: Text;
+        i: Integer;
+    begin
+        URL := LAMSetup.EVO_LAM_RetrieveURL + '?Key=' + LAMSetup.EVO_LAM_APIKey + '&Id=' + searchId;
+
+        HttpClient.Timeout(60000 * 3);
+        HttpRequestMessage.SetRequestUri(URL);
+        HttpRequestMessage.Method('POST');
+        HttpRequestMessage.GetHeaders(Headers);
+        Headers.Add('Return-Type', 'application/json');
+        if HttpClient.Send(HttpRequestMessage, HttpResponseMessage) then begin
+            HttpResponseMessage.Content.ReadAs(JsonText);
+            if JsonText <> '' then begin
+                JObject.ReadFrom(JsonText);
+
+                JObject.Get('Items', JToken);
+                JArray := JToken.AsArray();
+
+                if JArray.Count > 0 then begin
+                    for i := 0 to JArray.Count - 1 do begin
+                        JArray.Get(i, JToken);
+                        JObject := JToken.AsObject();
+
+                        TempAutocompleteAddress.Init();
+                        TempAutocompleteAddress.Id := i + 1;
+                        if JObject.Get('Line1', JToken) then
+                            TempAutocompleteAddress.Address := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress.Address));
+                        if JObject.Get('Line2', JToken) then
+                            TempAutocompleteAddress."Address 2" := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress."Address 2"));
+                        if JObject.Get('City', JToken) then
+                            TempAutocompleteAddress.City := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress.City));
+                        if JObject.Get('CountryIso2', JToken) then
+                            TempAutocompleteAddress."Country / Region" := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress."Country / Region"));
+                        if JObject.Get('Province', JToken) then
+                            TempAutocompleteAddress.County := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress.County));
+                        if JObject.Get('Company', JToken) then
+                            TempAutocompleteAddress.Name := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress.Name));
+                        if JObject.Get('PostalCode', JToken) then
+                            TempAutocompleteAddress.Postcode := CopyStr(JToken.AsValue().AsText(), 1, MaxStrLen(TempAutocompleteAddress.Postcode));
+                        TempAutocompleteAddress.Id := TempAutocompleteAddress.Count + 1;
+                        TempAutocompleteAddress.Insert();
+                    end;
+                end;
+            end;
+        end else
+            Message(GetLastErrorText);
+
+        exit(not TempAutocompleteAddress.IsEmpty);
+    end;
+
+    local procedure GetSetup()
+    begin
+        if not LAMSetup.EVO_LAM_Got then
+            LAMSetup.Get();
+    end;
+
+    var
+        LAMSetup: Record EVO_LAM_Setup;
+}
+
