@@ -1,0 +1,70 @@
+table 50200 "EVO_LAM_Setup"
+{
+    DataClassification = SystemMetadata;
+
+    fields
+    {
+        field(1; EVO_LAM_PrimaryKey; Code[10])
+        {
+            DataClassification = SystemMetadata;
+            Caption = 'Primary Key';
+
+        }
+        field(10; "EVO_LAM_APIKey"; Text[50])
+        {
+            DataClassification = CustomerContent;
+            Caption = 'API Key';
+        }
+        field(11; "EVO_LAM_FindURL"; Text[250])
+        {
+            DataClassification = CustomerContent;
+            InitValue = 'https://api.addressy.com/Capture/Interactive/Find/v1.00/json3.ws';
+            Caption = 'Find Url';
+        }
+        field(12; "EVO_LAM_RetrieveURL"; Text[250])
+        {
+            DataClassification = CustomerContent;
+            InitValue = 'https://api.addressy.com/Capture/Interactive/Retrieve/v1.00/json3.ws';
+            Caption = 'Retrieve Url';
+        }
+        field(13; "EVO_LAM_CountryFilter"; Text[80])
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Country Filter';
+        }
+        field(100000; EVO_LAM_Got; Boolean)
+        {
+            DataClassification = SystemMetadata;
+            Caption = 'Got';
+        }
+    }
+
+    keys
+    {
+        key(Key1; EVO_LAM_PrimaryKey)
+        {
+            Clustered = true;
+        }
+    }
+
+    trigger OnInsert()
+    begin
+        EVO_LAM_Got := true;
+    end;
+
+    trigger OnModify()
+    begin
+
+    end;
+
+    trigger OnDelete()
+    begin
+
+    end;
+
+    trigger OnRename()
+    begin
+
+    end;
+
+}
