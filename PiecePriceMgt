@@ -1,0 +1,59 @@
+
+using Microsoft.Inventory.Item;
+using Microsoft.Finance.Currency;
+using Microsoft.Finance.GeneralLedger.Setup;
+
+codeunit 50013 "Piece Price Mgt."
+{
+    procedure GetPiecePrice(ItemNo: Code[20]; DirectUnitCost: Decimal; UnitMeasure: Code[10]; CurrencyCode: Code[10]): Decimal
+    var
+        ItemUnitMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitMeasure.SetLoadFields("Qty. per Unit of Measure");
+        if not ItemUnitMeasure.Get(ItemNo, UnitMeasure) or (ItemUnitMeasure."Qty. per Unit of Measure" = 0) then
+            exit(DirectUnitCost)
+        else
+            exit(Round(DirectUnitCost / ItemUnitMeasure."Qty. per Unit of Measure", this.CalPiecePriceRoundingPrecision(CurrencyCode)));
+    end;
+
+    procedure GetDirectUnitCost(ItemNo: Code[20]; PricePerPiece: Decimal; UnitMeasure: Code[10]; CurrencyCode: Code[10]): Decimal
+    var
+        ItemUnitMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitMeasure.SetLoadFields("Qty. per Unit of Measure");
+        if not ItemUnitMeasure.Get(ItemNo, UnitMeasure) or (ItemUnitMeasure."Qty. per Unit of Measure" = 0) then
+            exit(PricePerPiece)
+        else
+            exit(Round(PricePerPiece * ItemUnitMeasure."Qty. per Unit of Measure", this.CalPiecePriceRoundingPrecision(CurrencyCode)));
+    end;
+
+    procedure GetUnitPrice(ItemNo: Code[20]; PricePerPiece: Decimal; UnitMeasure: Code[10]; CurrencyCode: Code[10]): Decimal
+    var
+        ItemUnitMeasure: Record "Item Unit of Measure";
+    begin
+        ItemUnitMeasure.SetLoadFields("Qty. per Unit of Measure");
+        if not ItemUnitMeasure.Get(ItemNo, UnitMeasure) or (ItemUnitMeasure."Qty. per Unit of Measure" = 0) then
+            exit(PricePerPiece)
+        else
+            exit(Round(PricePerPiece * ItemUnitMeasure."Qty. per Unit of Measure", this.CalPiecePriceRoundingPrecision(CurrencyCode)));
+    end;
+
+    local procedure CalPiecePriceRoundingPrecision(CurrencyCode: Code[10]): Decimal
+    var
+        Currency: Record Currency;
+        GeneralLedgerSetup: Record "General Ledger Setup";
+    begin
+        ///Based on codeunit 7008 "Price Calculation Buffer Mgt." - CalcUnitAmountRoundingPrecision
+        if CurrencyCode <> '' then begin
+            Currency.SetLoadFields("Unit-Amount Rounding Precision");
+            Currency.Get(CurrencyCode);
+            Currency.TestField("Unit-Amount Rounding Precision");
+            exit(Currency."Unit-Amount Rounding Precision");
+        end else begin
+            GeneralLedgerSetup.SetLoadFields("Unit-Amount Rounding Precision");
+            GeneralLedgerSetup.Get();
+            GeneralLedgerSetup.TestField("Unit-Amount Rounding Precision");
+            exit(GeneralLedgerSetup."Unit-Amount Rounding Precision");
+        end;
+    end;
+}
