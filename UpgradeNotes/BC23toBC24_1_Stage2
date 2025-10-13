@@ -1,0 +1,428 @@
+# Evo-supply Minor Version Upgrade - Stage #2
+# Copyright © 2023 BCN Limited
+#
+# Written by : Neil Halliday
+
+# Prepare PowerShell
+#
+
+# 1. SystemApplication
+# 2. BaseApplication
+# 3. Application
+
+function main
+{
+    Clear-Host
+    Import-Module "C:\Program Files\Microsoft Dynamics 365 Business Central\240\Service\NavAdminTool.ps1" >$null 3>$null
+
+    Write-Host "Evo-supply Minor Version Upgrade - Stage #2"
+    Write-Host "Copyright © 2023 BCN Limited"
+    Write-Host ""
+
+    $BCServerInstance = "BC240"
+    $DatabaseServer = "SERVER002"
+    $DatabaseInstance = "GFABC"
+    $DatabaseName = "GFA_LIVE"
+    $Script:BCUpgradeInstallationDirectory = "C:\temp\Business Central 24.1\Dynamics.365.BC.19498.GB.DVD"
+    $Script:NewLicenseFile = "C:\temp\EvoSoftV24.bclicense"
+
+    Write-Host "Database Server: " -NoNewline
+    Write-Host $DatabaseServer -ForegroundColor Cyan
+    Write-Host "Database Name: " -NoNewline
+    Write-Host $DatabaseName -ForegroundColor Cyan
+    Write-Host "Server Instance: " -NoNewline
+    Write-Host $BCServerInstance -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "Root Folder: " -NoNewLine
+    Write-Host $Script:Path -ForegroundColor Cyan
+
+    $Script:CurrentAppsPath = $Script:Path + '\CurrentApps'
+    $Script:UpgradeAppsPath = $Script:Path + '\UpgradeApps'
+    $Script:MicrosoftCSVFile = $Script:Path + '\Microsoft.csv'
+    $Script:OthersCSVFile = $Script:Path + '\Others.csv'
+
+    Write-Host "Current Apps: " -NoNewLine
+    Write-Host $Script:CurrentAppsPath -ForegroundColor Cyan
+
+    Write-Host "Upgrade Apps: " -NoNewLine
+    Write-Host $Script:UpgradeAppsPath -ForegroundColor Cyan
+
+    Write-Host "Using: " -NoNewLine
+    Write-Host $Script:MicrosoftCSVFile -ForegroundColor Cyan
+
+    Write-Host "Using: " -NoNewLine
+    Write-Host $Script:OthersCSVFile -ForegroundColor Cyan
+
+    $Script:MicrosoftApps = Import-Csv $Script:MicrosoftCSVFile | Sort-Object ProcessOrder
+    $Script:OtherApps = Import-Csv $Script:OthersCSVFile
+    $Script:UnpublishMicrosoftApps = $Script:MicrosoftApps | Sort-Object ProcessOrder -Descending 
+    $Script:UnpublishOtherApps = $Script:OtherApps | Sort-Object ProcessOrder -Descending
+   
+    Write-Host ""
+
+    #CopyUpgradeApplications
+    #PlatformUpdate
+    #UpdateAndRestartServiceInstance
+    #ImportNewLicense
+    #RestartServerInstance
+
+    # Supposedly this runs parallel and causes issues
+    #SynchroniseTenant
+        
+    
+    #Publish-NAVApp -ServerInstance $BcServerInstance -Path "C:\temp\Business Central 24.1\Dynamics.365.BC.19498.GB.DVD\Applications\system application\source\Microsoft_System Application.app" -SkipVerification
+    #SyncAndUpgrade "Microsoft_System Application.app"
+    
+    #Publish-NAVApp -ServerInstance $BcServerInstance -Path "C:\temp\Business Central 24.1\Dynamics.365.BC.19498.GB.DVD\Applications\BusinessFoundation\Source\Microsoft_Business Foundation.app" -SkipVerification
+    #SyncAndUpgrade "Microsoft_Business Foundation.app"
+    #Install-NAVApp -ServerInstance BC240 -Name "Business Foundation" -Version  24.1.18927.19498
+    
+    #Publish-NAVApp -ServerInstance $BcServerInstance -Path "C:\temp\Business Central 24.1\Dynamics.365.BC.19498.GB.DVD\Applications\BaseApp\Source\Microsoft_Base Application.app" -SkipVerification
+    #SyncAndUpgrade "Microsoft_Base Application.app"
+    
+    #Publish-NAVApp -ServerInstance $BcServerInstance -Path "C:\temp\Business Central 24.1\Dynamics.365.BC.19498.GB.DVD\Applications\Application\Source\Microsoft_Application.app" -SkipVerification
+    #SyncAndUpgrade "Microsoft_Application.app"
+    
+    #UnPublishBaseMicrosoftApp "Microsoft_Application.app"
+    #UnPublishBaseMicrosoftApp "Microsoft_Base Application.app"
+    #UnPublishBaseMicrosoftApp "Microsoft_Business Foundation.app"
+    #UnPublishBaseMicrosoftApp "Microsoft_System Application.app"
+
+
+    #DataUpgrade
+    #PublishMicrosoftApps
+    #PublishOtherApps
+    #UnpublishUnwantedApps
+    #RecompileApps
+    #UpdateAndRestartServiceInstance
+    #SetNewBaseVersionNumber
+    #RestartServerInstance
+    #exit
+}
+
+function ShowError {
+    if ($Error.Count -eq 0) {
+        Write-Host "Done" -ForegroundColor Green
+    } else {
+        Write-Host "Failed :" $error[0] -ForegroundColor Red
+    } 
+}
+
+function CopyUpgradeApplications {
+    Write-Host "Copying upgrade applications from " + $Script:BCUpgradeInstallationDirectory
+    $Error.Clear()
+    
+    $Script:FullAppPath = $Script:BCUpgradeInstallationDirectory + '\Applications\*.app'
+    $Script:UnFilteredAppList = get-childitem -path $Script:FullAppPath -recurse | select Directory, name
+    foreach ($Script:App in $Script:UnfilteredAppList) { 
+        if ((-not $Script:App.Name.Contains("Test")) -and (-not $Script:App.Name.Contains("language")))
+            {    
+                $Script:SourceAppFilename = $Script:App.Directory.ToString() + '\' + $Script:App.Name + " "
+                Write-Host $Script:SourceAppFilename -NoNewline
+
+                try {
+                Copy-Item $Script:SourceAppFilename -Destination $Script:UpgradeAppsPath
+                }
+                catch { }
+                ShowError
+            }
+        }
+}
+
+function ImportNewLicense {
+    Write-Host "Importing license file..." -NoNewline
+    
+    $Error.Clear()
+    try {
+        Import-NAVServerLicense -ServerInstance $BcServerInstance -LicenseFile $Script:NewLicenseFile
+    }
+    catch { }
+    ShowError
+}
+
+function PlatformUpdate {
+    Write-Host "Updating database platform..." -NoNewline
+
+    $Error.Clear()
+    try {   
+        if ($DatabaseInstance -ne "")
+        { 
+            Invoke-NAVApplicationDatabaseConversion -DatabaseServer "$DatabaseServer\$DatabaseInstance" -DatabaseName $DatabaseName -Force
+        }
+        else
+        {
+            Invoke-NAVApplicationDatabaseConversion -DatabaseServer $DatabaseServer -DatabaseName $DatabaseName -Force
+        }
+    }
+    catch { }
+    ShowError
+}
+
+function UpdateAndRestartServiceInstance {
+    Write-Host "Updating " -NoNewLine
+    Write-Host $BcServerInstance -NoNewLine -ForegroundColor Cyan
+    Write-Host " server instance... " -NoNewline
+
+    $Error.Clear()
+    try {  
+        Set-NAVServerConfiguration -ServerInstance $BcServerInstance -KeyName DatabaseServer -KeyValue $DatabaseServer
+        if ($DatabaseInstance -ne "")
+        {
+            Set-NAVServerConfiguration -ServerInstance $BcServerInstance -KeyName DatabaseInstance -KeyValue $DatabaseInstance
+        }
+        Set-NAVServerConfiguration -ServerInstance $BcServerInstance -KeyName DatabaseName -KeyValue $DatabaseName
+    }
+    catch { }
+    ShowError
+
+    RestartServerInstance
+}
+
+function RestartServerInstance {
+    Write-Host "Restarting " -NoNewLine
+    Write-Host $BcServerInstance -NoNewLine -ForegroundColor Cyan
+    Write-Host " server instance... " -NoNewline
+
+    $Error.Clear()
+    try {
+        Restart-NAVServerInstance -ServerInstance $BcServerInstance
+    }
+    catch { }
+    ShowError
+}
+
+function SynchroniseTenant {
+    Sync-NAVTenant -ServerInstance $BCServerInstance -Mode Sync -Force
+}
+
+
+function PublishSyncAndUpgrade {
+    param(
+        [String] $AppFilename
+    )
+
+    $AppPath = $Script:UpgradeAppsPath + '\' + $AppFilename
+    $Application = Get-NAVAppInfo -Path $AppPath
+    PublishApp -AppName $Application.Name -AppFilename $AppPath 
+    SyncApp -App $Application
+    UpgradeApp -App $Application
+    Write-Host ""
+}
+
+#BC24+
+function SyncAndUpgrade {
+    param(
+        [String] $AppFilename
+    )
+
+    $AppPath = $Script:UpgradeAppsPath + '\' + $AppFilename
+    $Application = Get-NAVAppInfo -Path $AppPath
+    #SyncApp -App $Application
+    UpgradeApp -App $Application
+    Write-Host ""
+}
+#BC24-
+
+
+function PublishMicrosoftApps { 
+    foreach ($Extension in $Script:MicrosoftApps) { 
+        $NewExtensionFilename = $Extension.Publisher + '_' + $Extension.Name + '.app'
+        $NewExtensionFilename = ([char[]]$NewExtensionFilename | where { [IO.Path]::GetinvalidFileNameChars() -notcontains $_ }) -join ''
+        $NewExtensionFilename = $Script:UpgradeAppsPath + '\' + $NewExtensionFilename
+        
+        Write-Host "Publishing " -NoNewline
+        Write-Host $Extension.Name -ForegroundColor Cyan
+        Write-Host "File " -NoNewline
+        Write-Host $NewExtensionFilename -ForegroundColor Cyan
+
+        if (Test-Path -Path $NewExtensionFilename -PathType Leaf) {
+            $App = Get-NAVAppInfo -Path $NewExtensionFilename
+            PublishApp -AppName $Extension.Name -AppFilename $NewExtensionFilename
+            SyncApp -App $App
+            UpgradeApp -App $App
+        }
+
+        Write-Host
+    }
+}
+
+function UnPublishBaseMicrosoftApp {
+    param(
+        [String] $AppFilename
+    )
+
+    $AppPath = $Script:UpgradeAppsPath + '\' + $AppFilename
+
+    $Application = Get-NAVAppInfo -Path $AppPath
+    $PublishedApps = Get-NAVAppInfo -ServerInstance $BCServerInstance -Name $Application.Name
+    
+    foreach ($PublishedApp in $PublishedApps) { 
+        if ($PublishedApp.Version -ne $Application.Version) {
+            UnpublishApp $PublishedApp
+        }
+    }
+}
+
+
+function PublishOtherApps { 
+    foreach ($Extension in $Script:OtherApps) { 
+        $NewExtensionFilename = $Extension.Publisher + '_' + $Extension.Name + '.app'
+        $NewExtensionFilename = ([char[]]$NewExtensionFilename | where { [IO.Path]::GetinvalidFileNameChars() -notcontains $_ }) -join ''
+        $NewExtensionFilename = $Script:UpgradeAppsPath + '\' + $NewExtensionFilename
+
+        Write-Host "Publishing " -NoNewline
+        Write-Host $Extension.Name -ForegroundColor Cyan
+        Write-Host "File " -NoNewline
+        Write-Host $NewExtensionFilename -ForegroundColor Cyan
+
+        if (Test-Path -Path $NewExtensionFilename -PathType Leaf) {
+            $App = Get-NAVAppInfo -Path $NewExtensionFilename
+            PublishApp -AppName $Extension.Name -AppFilename $NewExtensionFilename
+            SyncApp -App $App
+            UpgradeApp -App $App
+        }
+
+        Write-Host
+    }
+}
+
+function UnpublishUnwantedApps {
+    Write-Host "Unpublishing unwanted apps..."
+
+    foreach ($Extension in $Script:UnpublishMicrosoftApps) {
+        $App = Get-NAVAppInfo -ServerInstance $BCServerInstance -Name $Extension.Name
+        if ($App.Count -gt 1) {
+            $App = Get-NavAppInfo -ServerInstance $BCServerInstance -Name $Extension.Name -Version $Extension.Version
+            UnpublishApp -App $App
+        }
+    }
+
+    foreach ($Extension in $Script:UnpublishOtherApps) {
+        $App = Get-NAVAppInfo -ServerInstance $BCServerInstance -Name $Extension.Name
+        if ($App.Count -gt 1) {
+            $App = Get-NavAppInfo -ServerInstance $BCServerInstance -Name $Extension.Name -Version $Extension.Version
+            UnpublishApp -App $App
+        }
+    }
+}
+
+function RecompileApps {
+
+    Write-Host "Recompiling apps..."
+    Write-Host ""
+
+    foreach ($Extension in $Script:OtherApps) {        
+        $App = Get-NavAppInfo -ServerInstance $BCServerInstance -Name $Extension.Name
+        Write-Host $Extension.Name  $Extension.ProcessOrder   $App.Name
+        $Error.Clear()
+        try { 
+            Repair-NAVApp -ServerInstance $BCServerInstance -Name $App.Name -Version $App.Version
+            Install-NAVApp -ServerInstance $BCServerInstance -Name $App.Name -Version $App.Version
+        }
+        catch { }
+        ShowError
+    }
+}
+
+function PublishApp
+{
+    param(
+        [string] $AppName,
+        [String] $AppFilename
+    )
+
+    Write-Host "Publishing " -NoNewline
+    Write-Host $AppName -ForegroundColor Cyan -NoNewline
+    Write-Host " ... " -NoNewline
+
+    $Error.Clear()
+    try {   
+        Publish-NavApp -ServerInstance $BCServerInstance -Path $AppFilename
+    }
+    catch { }
+    ShowError
+}
+
+
+function SyncApp
+{
+    param (
+        [PSObject] $App
+    )
+    
+    Write-Host "Synchronising " -NoNewline
+    Write-Host $App.Name -ForegroundColor Cyan -NoNewline
+    Write-Host " ... " -NoNewline
+
+    $Error.Clear()
+    try {   
+        Sync-NAVApp -ServerInstance $BCServerInstance -Name $App.Name -Version $App.Version
+    }
+    catch { }
+   ShowError
+}
+
+function DataUpgrade {
+    Write-Host "Upgrading data... " -NoNewline
+
+    $Error.Clear()
+    try {  
+        Start-NAVDataUpgrade -ServerInstance $BcServerInstance -FunctionExecutionMode Serial -SkipAppVersionCheck -Force
+        Get-NAVDataUpgrade -ServerInstance $BcServerInstance -Progress
+    }
+    catch { }
+    ShowError    
+}
+
+function UpgradeApp
+{
+    param (
+        [PSObject] $App
+    )
+    
+    Write-Host "Upgrading " -NoNewline
+    Write-Host $App.Name -ForegroundColor Cyan -NoNewline
+    Write-Host " ... " -NoNewline
+
+    $Error.Clear()
+    try {   
+        Start-NAVAppDataUpgrade -ServerInstance $BcServerInstance -Name $App.Name -Version $App.Version
+    }
+    catch { }
+    ShowError
+}
+
+
+function UnpublishApp
+{
+    param (
+        [PSObject] $App
+    )
+    
+    Write-Host "Unpublishing " -NoNewline
+    Write-Host $App.Name -ForegroundColor Cyan -NoNewline
+    Write-Host " ... " -NoNewline
+
+    $Error.Clear()
+    try {   
+        Unpublish-NavApp -ServerInstance $BcServerInstance -Name $App.Name -Version $App.Version
+    }
+    catch { }
+    ShowError
+}
+
+function SetNewBaseVersionNumber
+{
+    Write-Host "Setting new base version number..." -NoNewline
+    $Error.Clear()
+    try {
+        Set-NAVServerConfiguration -ServerInstance $BCServerInstance -KeyName SolutionVersionExtension -KeyValue "437dbf0e-84ff-417a-965d-ed2bb9650972" -ApplyTo All
+    }
+    catch { }
+    ShowError
+}
+
+
+$Script:Path = split-path -parent $MyInvocation.MyCommand.Definition
+main
