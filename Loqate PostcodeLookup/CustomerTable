@@ -1,0 +1,20 @@
+tableextension 50201 EVO_LAM_Customer extends Customer
+{
+    procedure EVO_LAM_CheckAddress()
+    var
+        AddressRequestBuffer: Record EVO_LAM_AddressRequestBuffer;
+        AutocompleteAddress: Record "Autocomplete Address" temporary;
+        PostalCodeLookup: Codeunit EVO_LAM_PostalCodeLookup;
+    begin
+        AddressRequestBuffer.EVO_LAM_FromCustomer(Rec);
+        if not PostalCodeLookup.CheckAddress(AddressRequestBuffer, AutocompleteAddress) then
+            exit;
+
+        Rec.Validate(Address, AutocompleteAddress.Address);
+        Rec.Validate("Address 2", AutocompleteAddress."Address 2");
+        Rec.Validate("Post Code", AutocompleteAddress.Postcode);
+        Rec.Validate(City, AutocompleteAddress.City);
+        Rec.Validate(County, AutocompleteAddress.County);
+        Rec.Validate("Country/Region Code", AutocompleteAddress."Country / Region");
+    end;
+}
