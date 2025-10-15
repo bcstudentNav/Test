@@ -1,0 +1,21 @@
+
+VsCode > Extensions
+Business Central.LinterCop
+
+
+Download the latest version (dll) file
+https://github.com/StefanMaron/BusinessCentral.LinterCop/releases
+
+Rename it to BusinessCentral.LinterCop
+
+C:\Users\Rui.Figueiredo\.vscode\extensions\ms-dynamics-smb.al-16.0.1826476\bin\Analyzers
+
+
+Workspace file
+
+"al.codeAnalyzers": [
+			"${CodeCop}",
+			"${UICop}",			
+			"${PerTenantExtensionCop}",
+			"${analyzerFolder}BusinessCentral.LinterCop.dll"		
+		],
