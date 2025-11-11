@@ -1,0 +1,29 @@
+namespace TechnologyServicesGroup.IP.BACS;
+
+using Microsoft.Bank.Payment;
+tableextension 70300 "BACSPayment Export Data" extends "Payment Export Data"
+{
+    fields
+    {
+        field(70300; "TSGRecipient Bank Sort Code"; Code[10])
+        {
+            Caption = 'Recipient Bank Sort Code';
+            DataClassification = CustomerContent;
+        }
+        field(70301; "TSGRecipient IBAN"; Code[100])
+        {
+            Caption = 'Recipient IBAN';
+            DataClassification = CustomerContent;
+        }
+        field(70302; "TSGRecipient SWIFT Code"; Code[100])
+        {
+            Caption = 'Recipient SWIFT Code';
+            DataClassification = CustomerContent;
+        }
+        field(70303; "TSGRecipient Name & Address"; Code[100])
+        {
+            Caption = 'Recipient Name & Address';
+            DataClassification = CustomerContent;
+        }
+    }
+}
