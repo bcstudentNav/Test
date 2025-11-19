@@ -44,3 +44,30 @@ by default the parameter DataPerCompany is true unless we specify it DataPerComp
 
 
 Exam question - which parameter we weill need to change to debug a session - Parameter( BreakonError)
+  EnvironmentType = Sandbbox
+
+BreakOnRecordWrite - debugger when anything is modified
+schemaUpdateMode -  Sync (by default), ForceSync, Recreate (delete all the data of the archive) ( you nee dto know the difference on the 3)
+
+App.json (identifiers that identify the app)
+id
+Name
+Publisher
+Version
+
+also we need to know idranges, dependencies, plataform, application
+
+for the exam there will be a question is important to know the resourceExposurepolicy (AllowDebugging, AllowDowloading Sopurce,. includeSopurceinSymbolsFile)
+
+Once you create an app, launch is not part of the app.
+
+app.josn is also called the manifest file
+
+know how namespaces work  - copy of .NEt to organize objects and remove the needed to work with prefixes (i.e), although apps for AppSource need prefixs
+Customer table - namespace Microsoft.Sales.Customer
+               - using System.Telemetry
+
+Page Inspector - Explore Page in VS Code
+
+Debuggingg
+
