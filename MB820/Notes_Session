@@ -1,9 +1,46 @@
 
+ - Limitations
+   Queries and API Pages cannot be extensible
+
+ - AppSource - Pivate Object Range
+          - Validate Checklists (Technichal, MArketing)
+
+  PTE (Per Extension Tenat)
+   Object Range - 50.000 - 99.999
 
 
+- 5 Steps to register app
+  1. Become Partner ( Work Account, MPN, Register as a publisher.,, App Specifications, Object Rabhe ,)
 
-Code Analyzers
-AppSourceCop
-CodeCop
-PerTenantExtensionCop
-UICop
+ - Detailed Techichal Validation ( High Level - Guidelines) - i.e don't use OnBedoreCompanyOpen or OnAfterCompanyOpen
+
+Check all the steps to register an app on AppSource
+
+- Code Analysis Tool
+    Code Analyzers ( need to know what)
+    AppSourceCop - Publish App to AppSource ( n of warnings or errors should be zero) - Mandatory for Appsource
+    CodeCop - 
+    PerTenantExtensionCop
+    UICop
+
+    VsCode - Settings - ALLanaguage Extension (Enable Code Analysis) there is a n option (bacckround Code Analysis)
+
+- Install develope and deploy for BC
+ Install Dev Env 
+ AL:GO - Create a projext and configure JSON files
+  NEed to know the order of questions:
+   1. Name and path where it going to create
+   2. Version oif Bsuiness Central
+   3. SSAS or OnPrem
+Files are created (launch.josn - environment and ) / app.json (runtime)
+Download Symbols
+ 
+
+worth to check the Learn ( Test your knowledge questions)
+https://learn.microsoft.com/en-us/training/modules/intro-development-environment/10-check
+
+Table
+by default the parameter DataPerCompany is true unless we specify it DataPerCompany=false;
+
+
+Exam question - which parameter we weill need to change to debug a session - Parameter( BreakonError)
