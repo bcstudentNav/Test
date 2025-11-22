@@ -18,8 +18,71 @@ var
 Module: ModuleInfo
 begin
   NavApp.GetCurrentModuleInfo(Module);
-  if Module.DataVersion().Major() = 1 then
+  if Module.DataVersion().Major() = 1 then  -> only run if the Major version is 1
       UpdateSomething();
 end;
 trigger OnUpgradePerDatabase
+
+Order of the ttriggers (Upgrade Codeunit)
+1
+OnCheckPreConditionsPerCompany
+OnCheckPreConditionsPerDatabase
+2
+OnUpgradePerCompany
+OnUpgradePerDatabase
+
+3
+OnValidateUpgradePerCompany
+OnValidateUpgradePerDatabase
+
+
+-----1----2-----3   
+ you can control if the user is upgrading from 1 to 3 without passing to 2 (in this case you can raise an error message).
+
+
+App X contains tables and tables extension
+-------------------------------------------------Publish (upload to the server)--------------> install
+
+if you decide to uninstall system will archive the data on your app.
+
+------re-publish---------------------> in that case BC will try to restore the data from the archive ( if there some some schema changes BC could not restore. what you can do is to upgrade code or ForceSync).
+
+
+Obsolete properties on a field
+ObsoleteState ( Pending, Removed)
+ObsoleteReason
+ObsoleteTag
+
+Microsoft announces (in theory) 2 versions ahead of Removed fields.
+
+There is a repository (Stefan Maron) that keeps track of the code history
+
+Check also DataTransfer for the exam
+How can we write code from one table into another table.
+Note: It can only used only on UPPGRADE Codeunit 
+
+dt: DataTransfer ( Check the right order to use this )
+
+1 dt.SetTabbles (Database:: FromTablem, Database.ToTable(())
+2 dt.AddFieldValue
+3 dt.CopyRows
+
+DataTransfer cannot be used on the followont tables
+Non-SQL Tables
+System Tables
+Virtual Tables
+Audited tables as the destination
+Obsolete tables as the destination
+
+
+
+
+
+
+
+
+
+
+
+
 
