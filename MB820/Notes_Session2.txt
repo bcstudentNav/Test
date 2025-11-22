@@ -1,0 +1,25 @@
+
+
+Installation and upgrade codeunits
+
+Codeunit 
+Subtype = Install
+
+trigger OnInstallAppPerCompany
+trigger OnInstallAppPerDatabase
+
+
+Codeunit 
+Subtype = Upgrade
+(version no. incremented to an higher version to run the cu/ttriggers)
+
+trigger OnUpgradePerCompany
+var
+Module: ModuleInfo
+begin
+  NavApp.GetCurrentModuleInfo(Module);
+  if Module.DataVersion().Major() = 1 then
+      UpdateSomething();
+end;
+trigger OnUpgradePerDatabase
+
