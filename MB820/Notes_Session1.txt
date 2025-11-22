@@ -71,3 +71,29 @@ Page Inspector - Explore Page in VS Code
 
 Debuggingg
 
+[NonDebuggable] Attribute
+
+Snapshot debugging
+ using VSCode process of Production that you want to debug  and while you're doing that VSCode will record  and then 
+
+
+Copy Production - Admin Center  ( Copy environment)
+During working hours it could affect the users performance wise, it will conusme resources
+
+if you publish a app from VsCode directy to Sandbox that will be published as DEV
+
+Need to know the diufference between a Dev, PTE and Global extension
+
+There might be apps that require or depend on the app that  that you want to uninstall. There apps are referred to as dependents.
+
+------------------Wave 1 ---------Wave 2 --------------->1Year
+                         
+Breaking changes (Waves)
+
+
+
+
+
+
+
+
