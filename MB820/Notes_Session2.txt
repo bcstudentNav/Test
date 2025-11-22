@@ -74,6 +74,81 @@ Virtual Tables
 Audited tables as the destination
 Obsolete tables as the destination
 
+----------------------------------------------
+CopyFields if you wnat to join 2 tables
+ 
+dt.SetTables(Database::Source, Database::Destination);
+dt.AddFieldBalue
+dt.AddSourceFilter
+dt.AddJoin 
+dt.CopyFields
+
+
+-----------------
+
+
+1 Production ( database until 80.00GB - database is compressed)
+3 Sandboxes 
+
+
+----------------------
+Detect and aboid breaking changes
+
+When you have one or more applications on AppSource you need to make sure that you don't introduce changes when you release a new version of your app.
+
+
+Use AppSourceCop to detect breaking changes
+ Try ti hude your
+
+
+Microsoft created overload technique when upgrades versions.
+Example:
+
+procedure MyBaseProcedure(MyParameter:: Text[20])
+begin
+ Message(MyParameter);
+end;
+
+procedure MyBaseProcedure(MyParameter:: Text[20]; MyOtherParameter:: Text[20])
+begin
+ Message(MyParameter + ' ' + MyOtherParameter);
+end;
+
+-------------
+Exam
+Access modifiers are only taken consideration at compile time.
+
+internal - object or field can be accessed only by code in the same module (internval visisible)
+local  - the field can be accesse only by the code in the same table or table extension where the field is defined. ( Applies o table fields only)
+protected - the field can be accesse only by the code of that table ( Applies o table fields only)
+public - The object or field can be accessed by any other code in the same module and in other modules that references it. ( Note This is the default value)
+
+-----------------------------------
+
+
+Develop 
+
+Table
+Properties:
+Caption - 
+DrillDownPageID - 
+LookupPageI - 
+DataClassidfication -
+DataCaptionFields - 
+
+
+App.Json  
+"Features" you neenable the tranlsation file - you if you enable you need to repack your solution and it creates a xlf file
+
+if you need to translate file create a copy of the file and change the targe-language and start by editing the <target>
+Application to help (i.e - Poedit)
+
+
+Need to know snippets
+
+
+
+
 
 
 
