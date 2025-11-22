@@ -131,7 +131,13 @@ Develop
 Table
 Properties:
 Caption - 
-DrillDownPageID - 
+DrillDownPageID - is used on flowfields. when we clicked on the calculated figure it will only display the related page of the Egg Production Line if the DrillDownPageIs is set up.
+
+    field(12; Number of Eggs Produced; Decimal)
+    {
+        CalcFormula = sum("Egg Production Line". Quantity where .....)
+    }
+
 LookupPageI - 
 DataClassidfication -
 DataCaptionFields - 
@@ -143,8 +149,10 @@ App.Json
 if you need to translate file create a copy of the file and change the targe-language and start by editing the <target>
 Application to help (i.e - Poedit)
 
-
+Be aware if you continue add files to your extension the copied files ( for other languages) are not updated automatically
 Need to know snippets
+
+
 
 
 
