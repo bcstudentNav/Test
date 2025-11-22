@@ -138,10 +138,15 @@ DrillDownPageID - is used on flowfields. when we clicked on the calculated figur
         CalcFormula = sum("Egg Production Line". Quantity where .....)
     }
 
-LookupPageI - 
-DataClassidfication -
+LookupPageId - used in table relations. Example Customer.SalesPersonCode when you lookup the field the +New is there it means that the LookuppageID 
+DataClassidfication - search on BC for DatClassification Worksheet ( GDPR)
 DataCaptionFields - 
 
+fields
+keys
+fieldgroups
+
+procedure
 
 App.Json  
 "Features" you neenable the tranlsation file - you if you enable you need to repack your solution and it creates a xlf file
@@ -151,6 +156,84 @@ Application to help (i.e - Poedit)
 
 Be aware if you continue add files to your extension the copied files ( for other languages) are not updated automatically
 Need to know snippets
+
+
+Table fields 
+require an unique ID nad name
+
+Code data type - 1..250
+Text data type - 1..2048
+
+Need to know how to crerate Table Relation
+
+Example (
+Sales Line  (No.)
+ TableRelation = if (Type = const(" ")) "Standard Text"
+            else
+            if (Type = const("G/L Account"), "System-Created Entry" = const(false)) "G/L Account" where("Direct Posting" = const(true), "Account Type" = const(Posting), Blocked = const(false))
+            else
+            if (Type = const("G/L Account"), "System-Created Entry" = const(true)) "G/L Account"
+            else
+            if (Type = const(Resource)) Resource
+            else
+            if (Type = const("Fixed Asset")) "Fixed Asset"
+            else
+            if (Type = const("Charge (Item)")) "Item Charge"
+            else
+            if (Type = const("Allocation Account")) "Allocation Account"
+            else
+            if (Type = const(Item), "Document Type" = filter(<> "Credit Memo" & <> "Return Order")) Item where(Blocked = const(false), "Sales Blocked" = const(false))
+            else
+            if (Type = const(Item), "Document Type" = filter("Credit Memo" | "Return Order")) Item where(Blocked = const(false));
+            ValidateTableRelation = false;
+
+Exam question
+ValidateTableRelation - check if the related record exists. (Default is true).
+
+Media Datatype
+
+3 Datatypes where when can leep binary data:
+BLOB - don't use it. it can hold 2GB per record
+Media ( this is the new blob)
+MediaSet ( can hold multiple iamges)
+
+
+Flowfield
+Normally editable = false;
+FlowClass = FlowField
+CalcForumula = lookup, su,. exist, average
+
+keys
+Primary Key * distinguish the record (Clustered Key 0 by definition is faster)
+
+Max of no keys in table
+Max of fields in PK :20
+
+ideally you should have 3 - 5 keys
+
+
+fieldgroups
+{
+  fieldgroup(DropDown) - when you dropdown the columns will be used as a filter if you type down for a value 
+
+fieldgroup(BRICK) you are on a page and you change to Tiles ( Customer you will see Description and Picture) - Search for tiles on Microsoft Learn
+
+
+trigger OnRename() -  if you change any of the fields of the PK this trigger fires
+begin
+end
+
+Example
+Upgrade CU's
+
+if ChickentType.Get(OldChickenTypeCode) then
+  ChickenType.Rename(NewChickenTypeCode)
+
+02h08m
+
+
+
+
 
 
 
