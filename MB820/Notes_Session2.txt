@@ -327,6 +327,68 @@ area(content)
 Usually you have questions about how to link page tyoes
 
 
+AutoFormatExpression, AutomaFormatExpression - important to kno wis extensible
+we can use Codeunits to extend the autoformattype 
+
+
+IncludeCaption 
+LabelsSection
+will use always the same language so we need to generate extra datafields . FieldCaption or Label vars ( OnFterGetRecord - CurrReport,Language= F(LanguageCode) and we can dinamically change the language of the recipient.
+
+dataitem(Customer;Customer)
+  {
+   column(No_Customer. "No.") {]
+  }
+dataitem(Vendor;Vendor)
+  {
+   column(No_Vendor. "No.") {]
+  }
+
+this case it's an UNION because the dataitems are at the same level.
+----------------------------
+CROSS JOIN (below) -there is no an explicit link aqll the records so it will linked Customer with all the CLE's
+dataitem(Customer;Customer)
+  {
+   column(No_Customer. "No.") {]
+  
+    dataitem("Cust. Ledger Entry";"Cust. Ledger Entry")
+      {
+       column(DocumentType_Vendor. "No.") {]
+      }
+}
+
+LEFT OUTER JOIN (below) - using DataItemLink. For every customer will fectrh the correspondent CLE's. if there are no CLE's it will display the record
+dataitem(Customer;Customer)
+  {
+   column(No_Customer. "No.") {]
+  
+dataitem("Cust. Ledger Entry";"Cust. Ledger Entry")
+  {
+DataItemLink = "Customer No.£ = field("No.")
+column(DocumentType_Vendor. "No.") {]
+  }
+}
+
+
+INNER JOIN (below) - without an explicit link aqll the records. For every customer fetch all the CLE's
+dataitem(Customer;Customer)
+PrintOnlyIfDetail;  
+{
+   column(No_Customer. "No.") {]
+  
+dataitem("Cust. Ledger Entry";"Cust. Ledger Entry")
+  {
+DataItemLink = "Customer No.£ = field("No.")
+column(DocumentType_Vendor. "No.") {]
+  }
+}
+
+
+
+
+
+
+
 
 
 
