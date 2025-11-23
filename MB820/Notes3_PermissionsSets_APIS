@@ -1,1 +1,126 @@
 
+
+Extension Management - Upload Details - First time it will error if we don't have a permission set
+
+Extensions > AL - if you enable PerTenantExtensionCop it will error
+
+notmally when we develop we have the SUPER permission hhich gives permissions on all objects.
+
+You need to assign permissions sets into your extension.
+To generate a permissionset > Command Pallet Generate Permission set as AL containing current object extension.
+
+before there the permissionsets on XML which still works for backwards compability. (Generate permission set as XML file)
+
+Permissions Set 
+Property Assignable = true to other uders
+
+R Read
+M Modify
+I Insert
+D Delete
+X Execute
+
+Similar to UI Web client ( Permissions sets)
+INDIRECT (i.e. - Insert permission) vi other objects
+
+Indirect permissions in AL code should be lowercase.
+
+Composing permission sets - Permissions could be a container of other permissions sets, 
+  IncludePermissionsSets
+  ExcludePermissionsSets
+
+Read the example 
+https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-permissionset-composing
+
+----
+
+Codeunits 
+
+
+internal procedure -  only on my app can use the procedure.
+
+
+Events Recorder page
+
+
+
+Event Publisher (Integration - no such promisers they could be changed on the future). On Std code these are considered Integration Events.
+
+Eventt Publisher Business - ISV contains a promise that will never change or break!!
+
+Views
+
+User Assistance Model - Technique  SSASification
+avoid manually intervention (support). if the user has an error the idea is to help the user sort errors. Based on the following principles:
+Get Started - Make it easy to start using Business Central with your own data.
+Get nblcked - Embedded user assistance implemented as tooltips answers most immediate questions about what fields and actions do.
+Learn more - The Helpe menu and the tooltips provide context-sensitive links
+
+SSASification tehniques
+Wiezar
+ApplicatunAerwas
+Customizing the user roles
+
+------------
+
+
+Configuration Tables - New Implemenentation Setup
+Transactional Tables  ( Sales Orders Purhase Orders, Journals)
+Posted Transaction Tables (Tables History)
+
+Master Data (Setup and No. Series)
+Implement No. series Pattern (Business Foundation new updated CU's No Series, No Series Management)
+
+which methods do you need to use No, Series ( No.Series.AreRelated NoSeries.GetNextNo) old was NoSeries.InitSeries
+
+
+
+Setup Table and Singleton Design Pattern (PK is always empty. The Datatype of a Primary Key od a setup table is Code
+
+table 189 "VAT Setup"
+{
+    Caption = 'VAT Setup';
+    DataClassification = CustomerContent;
+    DrillDownPageID = "VAT Setup";
+    LookupPageID = "VAT Setup";
+
+    fields
+    {
+        field(1; "Primary Key"; Code[10])
+        {
+            AllowInCustomizations = Never;
+            Caption = 'Primary Key';
+        }
+trigger OnOpenPage()
+    begin
+        Rec.Reset();
+        if not Rec.Get() then begin
+            Rec.Init();
+            OnOpenPageOnBeforeRecInsert(Rec);
+            Rec.Insert();
+        end;
+
+
+we need to know the Facade design pattern for the exam, it's a way to protect your IP. You need to know that for the exame!!!
+
+    Facade --> CU --> t
+    Facade --> CU facade --> CU --> t the goal is for the outside is to only see the CU methods of the facase
+
+example Codeunit 3971 ( Access Puvlic) that connexts to codenit 3970 ( Access Internal)
+
+BCApps all of the Codeuntis Implementation and themn you have the facade Codeunits.
+
+
+---------------------
+
+Manage Errors 
+
+
+
+
+
+
+
+
+
+Check 
