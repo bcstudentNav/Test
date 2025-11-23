@@ -229,7 +229,54 @@ Upgrade CU's
 if ChickentType.Get(OldChickenTypeCode) then
   ChickenType.Rename(NewChickenTypeCode)
 
-02h08m
+
+----------------
+
+Pages
+
+Document - Header Page
+
+layout
+{ 
+  area(content)
+  {
+    group(General)
+    field("No.". Rec."No."
+    { }
+
+  }
+part(TableLineSubPage; Egg ProductionSubPage)
+{ SubPageLink = Document No. = field("No.");
+ApplicationArea=All;
+}
+
+page 50127 "Egg Production SubPage"
+{
+AutoSplitKey = true 
+DelayedInsert= true - if I havew a table and I via the page I will record a new record. at the moment the record insert will occur in the table? as soon as all                  thee fields on the PK have a value, the remain fields will be with a modify
+
+               Line TableLine No PK (Doc. No Line No.) - Doc No get the value from the Header Table and Line No. will get the vaue from the Autosplitkey
+
+
+  By definition - Sets a value that specifies whether a user must leave a record before it is inserted into the database. By default, new recors are inserted when the user leaves the control that shows the PK in the table.
+
+PageType = ListPart;
+}
+
+ApplicationArea - Sets the application area for a searched page or report in the webclient. Std values are All, Basic, Suite and Advanced.
+
+
+}
+
+AdditionalSearchTerms - question on exam
+
+CardPageID - 
+
+Chicken List page
+CardPageID = "Chicken Card" - by default you should define one the related card for a list
+
+
+
 
 
 
