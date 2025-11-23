@@ -275,9 +275,56 @@ CardPageID -
 Chicken List page
 CardPageID = "Chicken Card" - by default you should define one the related card for a list
 
+Tooltips need to be deined on tables
+
+Factboxes
+
+PageType  Card Part or List Part ( this type need to be part of other pages, List Part has a repeater).
+
+page 50126 "Egg Production Document"
+{
+
+ area(factboxes)
+  part(ChickenFactbox; "Chicken Factbox")
+  { 
+
+    Provider = EggProLineSubPage;  -> Source table of another table. Reember tthat for the exam 
+    SubPageLink = "No." = FIELD"Chicken No.");
+    ApplicationArea = All;
+  }
+}
 
 
+ListPlus page layouts
+The ListPlus pages primary purpose is to support users in managing or browhing a collection of data or entries. Fro example a Customer Sales Page is a List Plus Page that shows sales numbers for a customer and providing dedicated viewing options for sales analysis.
 
+you have a group where you can define filters and then you have lines
+
+page 155 "Customer Sales"
+{
+    Caption = 'Customer Sales';
+    DeleteAllowed = false;
+    InsertAllowed = false;
+    LinksAllowed = false;
+    PageType = ListPlus; <------------- Important
+    SaveValues = true;
+    SourceTable = Customer;
+
+area(content)
+        {
+            group(Options)
+            {
+                Caption = 'Options';
+                field(PeriodType; PeriodType)
+                {}
+
+ part(CustSalesLines; "Customer Sales Lines")
+            {
+                ApplicationArea = Suite;
+            }
+
+
+Usually you have questions about how to link page tyoes
 
 
 
