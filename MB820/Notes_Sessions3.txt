@@ -3,6 +3,8 @@ XMLPOrts
 Format - XML / Fixed / Variable Text
 Direction = Import / Export / Both
 
+FieldDelimiter
+FieldSeparator
 
 <root>
    <customer>  -> Element
@@ -11,4 +13,12 @@ Direction = Import / Export / Both
       <city country = "BE">Brussels </city>    city i an element country an attribute
   </customer>
 </root>
+
+
+------------
+
+Permission Sets
+Normally as developers we have SUPER Permission Sets but the users don't have that's why we need to give someone permissions on your app.
+
+
 
