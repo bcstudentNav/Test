@@ -1,1 +1,14 @@
-s
+XMLPOrts
+
+Format - XML / Fixed / Variable Text
+Direction = Import / Export / Both
+
+
+<root>
+   <customer>  -> Element
+      <no>
+      <name>
+      <city country = "BE">Brussels </city>    city i an element country an attribute
+  </customer>
+</root>
+
