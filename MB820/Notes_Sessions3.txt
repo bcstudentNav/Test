@@ -29,6 +29,35 @@ Web Client - Permission Set We have options Yes / Indirect.
 Indirect Permissions we use the lowercase in our permissionsets file.
 
 tabledata "Egg Production Header" = RMID will be changed to tabledata "Egg Production Header" = rmid
+https://learn.microsoft.com/en-us/dynamics365/business-central/dev-itpro/developer/devenv-permissionset-composing
+
+
+check the latest table for an example ( Could have the same situation as a question on the exam).
+
+
+------------------------
+Events  
+
+Now IsHandled design pattern
+
+We can susbribe to 
+Table
+Codeunit
+Page 
+Query ( only OnPre)
+Report
+XmlPort
+
+Subriber to tables and not pages ( UI).
+This is the only way to change business logic.
+
+We can create CUs with our own events
+Example
+Table
+   fields
+   methods
+
+
 
 
 
