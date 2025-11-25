@@ -20,5 +20,15 @@ FieldSeparator
 Permission Sets
 Normally as developers we have SUPER Permission Sets but the users don't have that's why we need to give someone permissions on your app.
 
+PermissionSet - Object
+
+or VsCode > Command Pallette > Generate Permission Set aL containing objects ( before the option was only for PermissionSet.XML)
+
+Web Client - Permission Set We have options Yes / Indirect.
+
+Indirect Permissions we use the lowercase in our permissionsets file.
+
+tabledata "Egg Production Header" = RMID will be changed to tabledata "Egg Production Header" = rmid
+
 
 
