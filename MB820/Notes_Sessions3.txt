@@ -89,6 +89,81 @@ Work with essential development standards
 Crerating tables ( master, supplemental subsidary, regiger, journal, ledger, document, setup)
 
 
+3 types of tables
+Configuration (Master , Setup, Subsidiary)
+Transaction tables ( Documents, Journals)
+Posted transaction ( Document History, Ledger Entry - Register)
+
+Setup ( Code PK) - Singleton Design Pattern
+PK is always empty
+Data Type (PK) Code. We use Code because it can be empty ( Integer cannot be empty).
+
+Example VAT Setup Page to create a record if it's empty
+   trigger OnOpenPage()
+    var
+        VATReportingDateMgt: Codeunit "VAT Reporting Date Mgt";
+    begin
+        IsVATDateEnabled := VATReportingDateMgt.IsVATDateEnabled();
+        if not Rec.Get() then begin
+            Rec.Init();
+            Rec.Insert();
+        end;
+    end;
+
+
+No Series 
+NoSeriesMgt.InitSeries (Insert)
+
+on the nerw ( Business Foundation)
+No.Series.AreRelated and No. Series.GetNextNo
+
+-----------
+
+Access Modifiers
+Internal - object field can be accessed only by code in the same module not from anoter module
+local - same table or table extension
+protected - the field can be accessed only by code in the same table
+public - object ior fieldcan be accessed by code same module or other modules
+
+Access modifiers are only taken into consideration at compile time.
+
+----------
+
+Test Toolkit 
+
+Subtype - Test 
+Test functions ( all of them will be executed)
+Test procedure - test should be sucessful if an raise an error.
+
+TryFunction.
+
+Methods on a Test Codeunit
+Test method - you use the test methods that include AL code that tests the business logic in the application where each method covers a transaction.
+Handler method - to automate tests by handling instancers when iser interaction is required by the code that is being tested by the test method. the handler test method is run nstead of  requested UI. the handler method should sumart the user interaction for test case such as validating messages, making selections .
+Normal method - same design 
+
+
+ASSERTERROR Keyword
+You use AssertError statements in test methods to test how your application behaves under failing conditions. These statements are called positive and negative tests. The AssertError keyword specifies that an error is expected at run time in the statement that follows the AssertError keyword.
+
+If a simple or compound statement that follows the AssertError keyword causes an error, then execution successfully continues to the next statement in the test method. You can get the error text of the statement by using the GETLASTERRORTEXT Method.
+
+If a statement that follows the AssertError keyword doesn't cause an error, then the AssertError statement causes the following error and the test method that's running produces a FAILURE result.
+
+
+
+
+
+
+
+
+
+
+
+---------------
+
+
+
 
 
 
