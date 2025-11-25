@@ -62,8 +62,31 @@ Events Recorder
 
 Event Publisher (2 types)
    Integration - no such promise
-   Business - contains a promise that will never change or break.
+   Business - contains a promise that will never change or break. ISV
+
+
+Example on KandyToyds
+ [IntegrationEvent(false, false)]
+    local procedure KandyOnCheckShippingWorksheetLineFulfilmentStatusAllowed(var EVSAVSShippingWorksheetLine: Record EVS_AVS_ShippingWorksheetLine; var AllowedLine: Boolean)
+    begin
+    end;
+
+
 -----------------------
+
+USER ASSISTANCE MODEL
+(SSASIFICATION) - Avoid support or intervention., busing other techniques so they can sort the issues.
+PPrinciples
+Get Started
+Get Unblocked ( tootips answers mst wimmediate questions and actions to.)
+Learn more  (Help menu and tooltips provide context-sensitive links to Help articles)
+
+
+-----
+
+Work with essential development standards 
+(Deign Patters)
+Crerating tables ( master, supplemental subsidary, regiger, journal, ledger, document, setup)
 
 
 
