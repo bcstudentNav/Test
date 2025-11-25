@@ -53,9 +53,17 @@ This is the only way to change business logic.
 
 We can create CUs with our own events
 Example
-Table
+Table                  ---> var that point to table
    fields
-   methods
+   methods ---> Business Logics
+
+Events Recorder
+
+
+Event Publisher (2 types)
+   Integration - no such promise
+   Business - contains a promise that will never change or break.
+-----------------------
 
 
 
