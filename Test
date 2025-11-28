@@ -1,0 +1,162 @@
+namespace RF.Core;
+
+using Microsoft.Inventory.Item;
+using Microsoft.Purchases.Document;
+
+tableextension 50100 PurchaseLine extends "Purchase Line"
+{
+    fields
+    {
+        field(50100; "Additonal Description"; Text[100])
+        {
+            Caption = 'Additonal Description';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+namespace RF.Core;
+
+using Microsoft.Inventory.Item;
+
+tableextension 50102 Item extends Item
+{
+    fields
+    {
+        field(50100; "Additional Description"; Text[100])
+        {
+            Caption = 'Additional Description';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+
+
+
+namespace RF.Core;
+using Microsoft.Purchases.Document;
+using Microsoft.Purchases.Vendor;
+using Microsoft.Inventory.Item;
+using Microsoft.Inventory.Location;
+
+
+codeunit 50101 Test1
+{
+
+    //1+ 
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", 'OnBeforeValidateEvent', "No.", false, false)]
+    local procedure OnBeforeValidateNo(var Rec: Record "Purchase Line"; var xRec: Record "Purchase Line"; CurrFieldNo: Integer)
+    var
+        StockkeepingUnit: Record "Stockkeeping Unit";
+        NoSkuTxtLbl: Label 'No Stockkeeping found for the following filters Location Code: %1, Item No.: %2 , Variant Code: %3', Comment = '%1 - Location Code, %2 - Item No., %3 - Variant Code';
+    begin
+        if Rec.IsTemporary then
+            exit;
+
+        if Rec.Type <> Rec.Type::Item then
+            exit;
+
+        StockkeepingUnit.SetRange("Location Code", Rec."Location Code");
+        StockkeepingUnit.SetRange("Item No.", Rec."No.");
+        StockkeepingUnit.SetRange("Variant Code", Rec."Variant Code");
+        if StockkeepingUnit.IsEmpty then
+            Message(NoSkuTxtLbl, Rec."Location Code", Rec."No.", Rec."Variant Code");
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Purchase Line", 'OnAfterValidateEvent', "No.", false, false)]
+    local procedure OnAfterValidateNo(var Rec: Record "Purchase Line"; var xRec: Record "Purchase Line"; CurrFieldNo: Integer)
+    var
+        StockkeepingUnit: Record "Stockkeeping Unit";
+        Item: Record Item;
+    begin
+        if Rec.IsTemporary then
+            exit;
+
+        if Rec.Type <> Rec.Type::Item then
+            exit;
+
+        Item.SetLoadFields("Additional Description");
+        if not Item.Get(Rec."No.") then
+            Clear(Item);
+
+        StockkeepingUnit.SetLoadFields(Description);
+        if StockkeepingUnit.Get(Rec."Location Code", Rec."No.", Rec."Variant Code") then
+            Rec."Additonal Description" := StockkeepingUnit."Additional Description"
+        else
+            Rec."Additonal Description" := Item."Additional Description";
+
+    end;
+    //1-
+
+    //2+
+    procedure ChecPOLocation()
+    var
+        PurchaseHeader: Record "Purchase Header";
+        ListLocBinMandatory: List of [Code[10]];
+    begin
+        ListLocBinMandatory := CheckLocationsBinMandatory();
+
+        PurchaseHeader.SetFilter("Location Filter", GetFilterFromList(ListLocBinMandatory));
+
+        Message('%1', PurchaseHeader.GetFilters);
+
+    end;
+
+    procedure CheckLocationsBinMandatory() ListLocBinMandatory: List of [Code[10]];
+    var
+        Location: Record Location;
+    begin
+        Clear(ListLocBinMandatory);
+
+        Location.SetLoadFields(Code, "Bin Mandatory");
+        if Location.FindSet() then
+            repeat
+                if Location.BinMandatory(Location.Code) then
+                    ListLocBinMandatory.Add(Location.Code);
+            until Location.Next() = 0
+    end;
+
+    local procedure GetFilterFromList(LocationList: List of [Code[10]]) LocationFilter: Text;
+    var
+        LocationCode: Code[10];
+        IsFirstItem: Boolean;
+    begin
+        Clear(LocationFilter);
+        IsFirstItem := true;
+        foreach LocationCode in LocationList do begin
+            if IsFirstItem then begin
+                LocationFilter := LocationCode;
+                IsFirstItem := false;
+            end else
+                LocationFilter += '|' + LocationCode;
+        end;
+        exit(LocationFilter);
+    end;
+    //2-
+
+    //3+
+    procedure UpdatePOVendorName(VendorNo: Code[20]; VendorName: Text[100])
+    var
+        PurchaseHeader: Record "Purchase Header";
+        Vendor: Record Vendor;
+    begin
+        Vendor.SetLoadFields("No.");
+        if not Vendor.Get(VendorNo) then
+            exit;
+
+        if ItemExistForVendor(VendorNo) then begin
+            PurchaseHeader.SetRange("Buy-from Vendor No.", VendorNo);
+            PurchaseHeader.ModifyAll("Buy-from Vendor Name", VendorName);
+        end;
+    end;
+
+    local procedure ItemExistForVendor(VendorNo: Code[20]): Boolean
+    var
+        Item: Record Item;
+    begin
+        Item.SetRange(Blocked, false);
+        Item.SetRange("Vendor No.", VendorNo);
+        exit(not Item.IsEmpty);
+    end;
+    //3-
+}
