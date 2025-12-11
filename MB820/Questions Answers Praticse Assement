@@ -1,0 +1,21 @@
+
+You are implementing a new feature in Microsoft Dynamics 365 Business Central to enhance user onboarding with an interactive tour on a Sales Invoice page.
+You need to design an interactive guide for the Sales Invoice page that communicates the purpose of each field and action concisely.
+Each correct answer presents part of the solution. Which three actions should you take?
+
+Using detailed descriptions for each field and action can overwhelm users and detract from the clarity of the teaching tips.
+Using sequential tips for invoice creation guides users step-by-step through the process, making the onboarding experience structured and informative.
+Defining properties for each field, such as AboutTitle and AboutText, provides clear explanations of what each field is about and what actions can be performed.
+Enabling the tour to start from the teaching tip allows users to initiate the tour at their convenience, enhancing flexibility and user control.
+Using bold text extensively overwhelms users and detracts from the clarity of the teaching tips.
+
+
+
+----------------
+
+A company implements a new feature in Microsoft Dynamics 365 Business Central to enhance user experience on the Customer List page.
+Create a view highlighting customers with balances greater than 500 LCY, sorted by name in ascending order, ensuring a unique layout.
+Each correct answer presents part of the solution. Which three actions should be performed?
+
+Defining a view in the page customization object allows for creating a customized view on the Customer List page, essential for meeting task requirements. Setting the SharedLayout property to false ensures the view has a unique layout, aligning with the goal of a distinct presentation. Filtering customers with a balance greater than 500 LCY is crucial for displaying the correct data set. Modifying the layout to add a new column is not feasible within a view, as views cannot introduce new columns.
+Setting the Caption property is a standard practice but does not affect the functionality or appearance required by the question.
