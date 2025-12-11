@@ -48,3 +48,15 @@ Setting TransactionModel to AutoCommit would commit changes to the database, con
 Using the OnBeforeTestRun trigger for initialization does not ensure test isolation, as it does not address the requirement of running tests independently without affecting each other.
 
 
+
+--------------
+
+You are developing a custom API for a car dealership application using Microsoft Dynamics 365 Business Central. The application manages car brands and models, allowing users to create, read, update, and delete records.
+You need to ensure the API supports deep insert operations to create a car brand with multiple car models in one request.
+Each correct answer presents part of the solution. Which two actions should you take?
+
+Defining a part on the API Car Brand page for API Car Model using the SystemId field in SubPageLink and setting the Multiplicity property to ZeroOrOne are both necessary actions to support deep insert operations.
+These configurations establish the required relationships and data handling capabilities.
+Disabling InsertAllowed, ModifyAllowed, and DeleteAllowed properties would prevent modifications, contradicting the goal.
+Setting ODataKeyFields to Name and Brand Id does not support deep inserts effectively, as it requires a single GUID field.
+Setting the ODataBaseUrl property to a custom endpoint does not facilitate deep insert operations, as it does not address the necessary data structure and relationships.
