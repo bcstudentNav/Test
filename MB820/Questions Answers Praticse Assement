@@ -19,3 +19,32 @@ Each correct answer presents part of the solution. Which three actions should be
 
 Defining a view in the page customization object allows for creating a customized view on the Customer List page, essential for meeting task requirements. Setting the SharedLayout property to false ensures the view has a unique layout, aligning with the goal of a distinct presentation. Filtering customers with a balance greater than 500 LCY is crucial for displaying the correct data set. Modifying the layout to add a new column is not feasible within a view, as views cannot introduce new columns.
 Setting the Caption property is a standard practice but does not affect the functionality or appearance required by the question.
+
+-----------------------
+Your organization is preparing to launch a new Microsoft Dynamics 365 Business Central app on Microsoft AppSource. The app will offer different levels of functionality and pricing options.
+
+You need to ensure the app can be purchased through Microsoft AppSource.
+
+Each correct answer presents part of the solution. Which three actions should you perform?
+
+
+To prepare a Microsoft Dynamics 365 Business Central app for transactability on Microsoft AppSource, it is essential to enable transactability in Microsoft Partner Center,
+define pricing plans, and map these plans to entitlements using the Service ID.
+These steps ensure that the app can be purchased and managed through Microsoft AppSource, providing customers with the appropriate features based on their selected plan.
+Implementing a custom payment gateway is not necessary as Microsoft AppSource handles payment processing.
+Creating a custom entitlement mapping is not necessary for enabling transactability on Microsoft AppSource, which uses Microsoft's entitlement framework.
+
+
+----------
+You are developing a new feature in Microsoft Dynamics 365 Business Central that involves complex calculations for sales orders. You have created several test codeunits.
+
+You need to automate the execution of these test codeunits to ensure they run independently without affecting each other.
+
+
+Setting TestIsolation to Codeunit ensures that all changes to the database are rolled back after each test codeunit executes,
+maintaining independence between tests.
+Using a test runner codeunit does not inherently automate the execution of test codeunits independently, as it requires additional configuration to ensure isolation and automation.
+Setting TransactionModel to AutoCommit would commit changes to the database, contradicting the requirement of running tests independently.
+Using the OnBeforeTestRun trigger for initialization does not ensure test isolation, as it does not address the requirement of running tests independently without affecting each other.
+
+
