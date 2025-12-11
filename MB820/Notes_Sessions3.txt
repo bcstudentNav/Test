@@ -142,6 +142,20 @@ Test method - you use the test methods that include AL code that tests the busin
 Handler method - to automate tests by handling instancers when iser interaction is required by the code that is being tested by the test method. the handler test method is run nstead of  requested UI. the handler method should sumart the user interaction for test case such as validating messages, making selections .
 Normal method - same design 
 
+In a test codeunit, the next tests still continue to run, even if a method failed.
+
+The TransactionModel can be set to:
+
+AutoCommit: The AutoCommit setting is the default value. A commit is issued at then of the test method. If an error occurs during the test method, then the transaction is rolled back. Even if you catch the error with an AssertError statement.
+
+AutoRollback: The transaction is always rolled back after test execution. If a Commit method is used during a test, then that test will fail with an error.
+
+
+https://learn.microsoft.com/en-us/training/modules/introduction-test-automation/2-test-applications
+
+
+
+None: Primarily used with TestPages. The Test method itself doesn't use a write transaction to the database, but the test method interacts with a TestPage. This TestPage has its own write transactions that are committed to the database if no errors occur. Otherwise they're rolled back at the end of the transaction.
 
 ASSERTERROR Keyword
 You use AssertError statements in test methods to test how your application behaves under failing conditions. These statements are called positive and negative tests. The AssertError keyword specifies that an error is expected at run time in the statement that follows the AssertError keyword.
@@ -163,6 +177,11 @@ If a statement that follows the AssertError keyword doesn't cause an error, then
 ---------------
 
 
+Telemetry
+
+Using Session.LogMessage in AL code is the appropriate method for capturing custom telemetry events, providing developers control over event structure
+
+To set up telemetry for a Microsoft Dynamics 365 Business Central extension, creating a Microsoft Application Insights resource in Azure is essential to collect telemetry data. Adding the connection string from this resource to the app.json file of the extension enables data transmission. Configuring telemetry settings in the app.json file is necessary but not sufficient on its own, and using Azure Monitor is for monitoring purposes after data collection.
 
 
 
